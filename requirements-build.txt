@@ -1,0 +1,4 @@
+-r requirements.txt
+pyinstaller
+# 原图标的内容为 PNG，PyInstaller 需要 Pillow 转成 Windows 图标。
+pillow
