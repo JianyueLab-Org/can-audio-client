@@ -68,4 +68,4 @@ cd controller
 
 ## 来源
 
-客户端提取自 `JianyueLab-Org/can-audio` 的 `controller/`，源提交 `81abcbc9eb26d565ed648dcbab5686a5bf3d20db`。保留客户端代码、图标、Opus 库、客户端测试及可选 RNNoise 构建支持。本项目使用自身 Git 仓库，不包含源仓库历史、服务端、其他客户端或 CI 工作流。
+客户端提取自 `JianyueLab-Org/can-audio` 的 `controller/`，已同步至源提交 `e724bff58ddad12eb965aba79817b4b58b30b489`。保留客户端代码、图标、Opus 库、客户端测试及可选 RNNoise 构建支持。本项目使用自身 Git 仓库，不包含源仓库历史、服务端、其他客户端或 CI 工作流。
