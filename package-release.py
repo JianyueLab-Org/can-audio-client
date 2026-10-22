@@ -16,7 +16,8 @@ STAGE = DIST / f'can-audio-client-{VERSION}-win-x64'
 def main():
     subprocess.run(['pwsh', '-File', str(ROOT / 'build.ps1')], check=True, cwd=ROOT)
     command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile',
-               '--name', 'can-voice', '--distpath', str(DIST / 'voice'),
+               '--name', 'can-voice', '--icon', str(ROOT / 'ui' / 'src' / 'ControllerClient' / 'app.ico'),
+               '--distpath', str(DIST / 'voice'),
                '--workpath', str(ROOT / 'build' / 'voice'), '--specpath', str(ROOT / 'build'),
                '--paths', str(ROOT / 'controller'), '--collect-all', 'pymumble_py3',
                '--hidden-import', 'pynput.keyboard._win32', '--hidden-import', 'pynput.mouse._win32',
