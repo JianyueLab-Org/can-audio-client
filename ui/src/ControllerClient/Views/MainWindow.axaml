@@ -1,0 +1,304 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ControllerClient.ViewModels"
+        x:Class="ControllerClient.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="CAN 管制员客户端"
+        SizeToContent="WidthAndHeight"
+        CanResize="False"
+        Topmost="{Binding IsTopmost}"
+        WindowDecorations="None"
+        BorderBrush="{DynamicResource Brush.Border.Control}"
+        BorderThickness="1"
+        WindowStartupLocation="CenterScreen">
+
+  <!--
+    排版与 AudioForVATSIM MainForm（ATC 模式）一致，窗口大小随模式变化、不可拖动缩放：
+
+    常规（AFV 690×475）：
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ [连接][设置][↑][—][✕] 席位呼号                         版本号      │
+    │                                        无线电 [TX][RX][耳机]      │
+    │ 收发信机来源 …  收发信机数量 3 [-]          最后接收频率 118.500    │
+    │ ATIS 来源 …                               最后接收呼号 CCA1501    │
+    ├────────────────────────────────┬────────────────────────────────┤
+    │ 频率（每页 6 个）                │ 内话 / 附加机场收发信机          │
+    │ 台站  频率  [TX][RX][XC] ✕      │                                │
+    │ [+]                 第 1/1 页 <>│                                │
+    └────────────────────────────────┴────────────────────────────────┘
+    未连接或按 [-] 收起时只剩顶部（AFV 690×123）。
+    置顶小窗（AFV 320×120）：版本号 [+][↓][—][✕] / 无线电 TX RX + 连接 / 最后接收；[+] 在下方显示频率面板。
+    不使用系统标题栏：拖动顶部空白处移动窗口。
+  -->
+  <Panel x:Name="Root">
+    <StackPanel>
+
+      <!-- ===== 顶部（常规） ===== -->
+      <Border Classes="toolbar" Width="672" Padding="10,8" IsVisible="{Binding IsNormalLayout}"
+              PointerPressed="OnHeaderPointerPressed">
+        <StackPanel Spacing="4">
+          <!-- 第一行：AFV btnConnect / btnSettings / btnOnTop / btnMinimize / btnClose / lblCallsign / versionLabel -->
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Sm}">
+              <Button Classes.primary="{Binding !IsConnected}" Width="80"
+                      Content="{Binding ConnectButtonText}" IsEnabled="{Binding !IsConnecting}" Click="OnConnectClick" />
+              <Button Width="80" Content="设置" Click="OnSettingsClick" />
+              <Button Classes="icon" Content="{Binding OnTopButtonText}" ToolTip.Tip="置顶小窗" Command="{Binding ToggleTopmostCommand}" />
+              <Button Classes="icon" Content="—" FontSize="10" ToolTip.Tip="最小化" Click="OnMinimizeClick" />
+              <Button Classes="icon danger" Content="✕" ToolTip.Tip="退出" Click="OnExitClick" />
+              <TextBlock Classes="callsign" Margin="8,0,0,0" Text="{Binding CallsignText}" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Grid.Column="2" Classes="caption mono" Text="{Binding VersionText}" VerticalAlignment="Center" />
+          </Grid>
+          <TextBlock Classes="caption" Text="{Binding StatusText}" TextWrapping="Wrap" MaxWidth="640" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <StackPanel Spacing="2">
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <TextBlock Classes="caption" Text="{Binding ConnectionStatus.FsdText}"
+                           ToolTip.Tip="由 CAN 数据源确认当前账号在线情况；本程序不直接建立 FSD 会话，每 15 秒更新。" />
+                <TextBlock Classes="caption mono" Text="{Binding ConnectionStatus.VoiceText}"
+                           ToolTip.Tip="每秒刷新语音状态；延迟为当前 TCP 或 UDP 的实际平均 Ping 往返时间。" />
+              </StackPanel>
+              <TextBlock Classes="caption" Text="{Binding ConnectionStatus.FeedText}" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="日志" Command="{Binding OpenLogsCommand}" VerticalAlignment="Top" />
+          </Grid>
+
+          <!-- 第二至四行：连接后显示 -->
+          <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,20,20" ColumnSpacing="16" IsVisible="{Binding IsConnected}">
+            <!-- AFV “Radio:” TX / RX / AudioSourceTile -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+              <TextBlock Classes="caption" Text="无线电" VerticalAlignment="Center" Margin="0,0,4,0" />
+              <Border Classes="indicator tile tx" Classes.active="{Binding IsTransmitting}" ToolTip.Tip="发射（按住已设置的 PTT）">
+                <TextBlock Text="TX" />
+              </Border>
+              <Border Classes="indicator tile rx" Classes.active="{Binding IsReceiving}" ToolTip.Tip="接收">
+                <TextBlock Text="RX" />
+              </Border>
+              <ToggleButton Classes="tile" Content="{Binding AudioOutputText}" IsChecked="{Binding IsSpeakerOutput}" ToolTip.Tip="切换耳机 / 扬声器输出" />
+            </StackPanel>
+
+            <!-- AFV lblSourceTitle / lblSource / lblTransCountHeader / lblTransCount / btnMore -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6">
+              <TextBlock Classes="caption" Text="收发信机来源" VerticalAlignment="Center" />
+              <TextBlock Classes="info" Text="{Binding TransceiverSource}" Width="90" />
+              <TextBlock Classes="caption" Text="收发信机数量" VerticalAlignment="Center" />
+              <TextBlock Classes="info" Text="{Binding TransceiverCountText}" />
+              <Button Classes="mini" Content="{Binding MoreButtonText}" ToolTip.Tip="展开 / 收起面板"
+                      IsVisible="{Binding ShowMoreButton}" Command="{Binding ToggleExpandedCommand}" />
+            </StackPanel>
+            <!-- AFV LblLastFreqTitle / lblLastFreq -->
+            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+              <TextBlock Classes="caption" Text="最后接收频率" VerticalAlignment="Center" Width="72" />
+              <TextBlock Classes="info" Foreground="{DynamicResource Brush.Frequency}" Text="{Binding LastReceivedFrequency}" Width="64" />
+            </StackPanel>
+
+            <!-- AFV lblUniATis / lblLastUniATIS -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6">
+              <TextBlock Classes="caption" Text="ATIS 来源" VerticalAlignment="Center" />
+              <TextBlock Classes="info" Text="{Binding AtisSource}" />
+            </StackPanel>
+            <!-- AFV lblLastRec / lblLastSender -->
+            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+              <TextBlock Classes="caption" Text="最后接收呼号" VerticalAlignment="Center" Width="72" />
+              <TextBlock Classes="info" Text="{Binding LastReceivedCallsign}" Width="64" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ===== 顶部（置顶小窗，AFV SetTopMost） ===== -->
+      <Border Classes="toolbar" MinWidth="320" Padding="10,8" IsVisible="{Binding IsTopmost}"
+              PointerPressed="OnHeaderPointerPressed">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="4">
+          <TextBlock Classes="caption mono" Text="{Binding VersionText}" VerticalAlignment="Center" />
+          <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Spacing="2">
+            <TextBlock Classes="caption" Text="{Binding ConnectionStatus.FsdText}" />
+            <TextBlock Classes="caption mono" Text="{Binding ConnectionStatus.VoiceText}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="{DynamicResource Space.Sm}">
+            <Button Classes="icon" Content="{Binding MiniVccsButtonText}" ToolTip.Tip="显示 / 隐藏频率面板"
+                    IsVisible="{Binding IsConnected}" Command="{Binding ToggleMiniVccsCommand}" />
+            <Button Classes="icon" Content="{Binding OnTopButtonText}" ToolTip.Tip="退出置顶小窗" Command="{Binding ToggleTopmostCommand}" />
+            <Button Classes="icon" Content="—" FontSize="10" ToolTip.Tip="最小化" Click="OnMinimizeClick" />
+            <Button Classes="icon danger" Content="✕" ToolTip.Tip="退出" Click="OnExitClick" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsConnected}">
+            <TextBlock Classes="caption" Text="无线电" VerticalAlignment="Center" Margin="0,0,4,0" />
+            <Border Classes="indicator tile tx" Classes.active="{Binding IsTransmitting}">
+              <TextBlock Text="TX" />
+            </Border>
+            <Border Classes="indicator tile rx" Classes.active="{Binding IsReceiving}">
+              <TextBlock Text="RX" />
+            </Border>
+            <ToggleButton Classes="tile" Content="{Binding AudioOutputText}" IsChecked="{Binding IsSpeakerOutput}" />
+          </StackPanel>
+          <Button Grid.Row="1" Grid.RowSpan="2" Grid.Column="1" Width="98" VerticalAlignment="Center"
+                  Classes.primary="{Binding !IsConnected}"
+                  Content="{Binding ConnectButtonText}" IsEnabled="{Binding !IsConnecting}" Click="OnConnectClick" />
+
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsConnected}">
+            <TextBlock Classes="caption" Text="最后接收" VerticalAlignment="Center" />
+            <TextBlock Classes="info" Foreground="{DynamicResource Brush.Frequency}" Text="{Binding LastReceivedFrequency}" />
+            <TextBlock Classes="info" Text="{Binding LastReceivedCallsign}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- ===== 下方面板 ===== -->
+      <StackPanel Orientation="Horizontal" Spacing="12" Margin="10"
+                  IsVisible="{Binding ShowStationPanel}">
+
+        <!-- 频率（AFV crossCouplePanel，369×346） -->
+        <Border Classes="panel" Width="370" Height="300">
+          <DockPanel>
+            <!-- AFV pnlPageButtons：“Pg 1/2 < >” -->
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+              <TextBlock Classes="caption" Text="{Binding StationPageText}" VerticalAlignment="Center" Margin="0,0,4,0" />
+              <Button Classes="mini" Content="&lt;" Command="{Binding PreviousStationPageCommand}" />
+              <Button Classes="mini" Content="&gt;" Command="{Binding NextStationPageCommand}" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+              <ItemsControl ItemsSource="{Binding PagedStations}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Spacing="4" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:StationViewModel">
+                    <!-- AFV ccPanel：台站名 / 频率（别名）/ TX RX XC / 删除 -->
+                    <Border Classes="stationRow" Classes.receiving="{Binding IsReceiving}">
+                      <Grid ColumnDefinitions="96,*,Auto,22" ColumnSpacing="6">
+                        <StackPanel VerticalAlignment="Center">
+                          <TextBlock Classes="stationName" Text="{Binding Name}" />
+                          <TextBlock Classes="caption mono" Foreground="{DynamicResource Brush.Rx}"
+                                     Text="{Binding ReceivingCallsign}" IsVisible="{Binding IsReceiving}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Classes="frequency" Text="{Binding Frequency}" />
+                          <TextBlock Classes="caption mono" IsVisible="{Binding HasAlias}"
+                                     Text="{Binding AliasFrequency, StringFormat='({0})'}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                          <ToggleButton Classes="chan tx" Content="TX" IsChecked="{Binding IsTx}" IsEnabled="{Binding CanTransmit}" ToolTip.Tip="发射" />
+                          <ToggleButton Classes="chan rx" Content="RX" IsChecked="{Binding IsRx}" ToolTip.Tip="接收" />
+                          <ToggleButton Classes="chan xc" Content="XC" IsChecked="{Binding IsCrossCoupled}" IsEnabled="{Binding CanTransmit}" ToolTip.Tip="交叉耦合" />
+                        </StackPanel>
+                        <Button Grid.Column="3" Classes="del" Content="✕" ToolTip.Tip="移除"
+                                IsVisible="{Binding CanRemove}"
+                                Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveStationCommand}"
+                                CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <!-- AFV pnlAddCC：[+]，展开后为 呼号: [输入] ✓ ✕ -->
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <Button Classes="mini" Content="+" ToolTip.Tip="添加台站" Command="{Binding BeginAddStationCommand}"
+                        IsVisible="{Binding IsNotAddingStation}" />
+                <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsAddingStation}">
+                  <TextBlock Classes="caption" Text="呼号" VerticalAlignment="Center" Margin="0,0,2,0" />
+                  <TextBox Classes="mono" Width="110" Text="{Binding NewStationText}" PlaceholderText="ZBAA_APP"
+                           GotFocus="OnNewStationGotFocus" KeyDown="OnNewStationKeyDown" />
+                  <Button Classes="mini" Content="✓" ToolTip.Tip="添加" Command="{Binding AddStationCommand}" />
+                  <Button Classes="mini" Content="✕" ToolTip.Tip="取消" Command="{Binding CancelAddStationCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </DockPanel>
+        </Border>
+
+        <!-- 右侧（AFV 259×343）：有数据库收发信机时为内话（afvPanelWithAPI），否则为附加机场收发信机（afvPanel3） -->
+        <Panel Width="270" Height="300" IsVisible="{Binding ShowSidePanel}">
+
+          <!-- 内话 -->
+          <Border Classes="panel" IsVisible="{Binding HasApiData}">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="section" Text="内话" HorizontalAlignment="Center" />
+              <ItemsControl ItemsSource="{Binding PagedLandlines}" Height="146">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <UniformGrid Columns="2" ColumnSpacing="6" RowSpacing="4" VerticalAlignment="Top" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:LandlineViewModel">
+                    <Button Classes="line"
+                            Classes.calling="{Binding IsCalling}"
+                            Classes.incoming="{Binding IsIncoming}"
+                            Classes.connected="{Binding IsConnected}"
+                            Classes.rejected="{Binding IsRejected}"
+                            ToolTip.Tip="{Binding StateText}"
+                            Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).PressLineCommand}"
+                            CommandParameter="{Binding}">
+                      <TextBlock Text="{Binding Callsign}" />
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <!-- AFV pnlMultiLand：“Pg 1 < >” -->
+              <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+                <TextBlock Classes="caption" Text="{Binding LandlinePageText}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <Button Classes="mini" Content="&lt;" Command="{Binding PreviousLandlinePageCommand}" />
+                <Button Classes="mini" Content="&gt;" Command="{Binding NextLandlinePageCommand}" />
+              </StackPanel>
+              <!-- AFV btnEndCall / btnAcceptCall / btnRejectCall -->
+              <Button Width="176" HorizontalAlignment="Center" Content="挂断" Command="{Binding EndCallCommand}" />
+              <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}" HorizontalAlignment="Center">
+                <Button Classes="primary" Width="83" Content="接听" Command="{Binding AcceptCallCommand}" />
+                <Button Width="83" Content="拒绝" Command="{Binding RejectCallCommand}" />
+              </StackPanel>
+              <!-- AFV btnTransMap / btnOnlineMap -->
+              <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Sm}" HorizontalAlignment="Center" Margin="0,4,0,0">
+                <Button Width="110" Content="收发信机地图" Click="OnMapClick" />
+                <Button Width="110" Content="在线地图" Click="OnMapClick" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- 附加机场收发信机 -->
+          <Border Classes="panel" IsVisible="False">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="section" Text="附加机场收发信机" HorizontalAlignment="Center" />
+              <Grid ColumnDefinitions="*,80" ColumnSpacing="{DynamicResource Space.Sm}" Height="170">
+                <Border Classes="well">
+                  <ListBox ItemsSource="{Binding AdditionalTransceivers}">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Classes="mono" Text="{Binding}" />
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="{DynamicResource Space.Sm}">
+                  <TextBox Classes="mono" Text="{Binding NewTransceiverAirport}" PlaceholderText="ICAO" MaxLength="4"
+                           KeyDown="OnNewTransceiverKeyDown" />
+                  <Button Content="添加" HorizontalAlignment="Stretch" Command="{Binding AddTransceiverCommand}" />
+                  <Button Classes="danger" Content="全部移除" HorizontalAlignment="Stretch" Command="{Binding RemoveAllTransceiversCommand}" />
+                  <Button Content="地图" HorizontalAlignment="Stretch" Click="OnMapClick" />
+                </StackPanel>
+              </Grid>
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="附加收发信机仅应在特殊情况下使用。如有无线电覆盖问题，请联系所在分部的设施工程师。" />
+            </StackPanel>
+          </Border>
+          <Border Classes="panel">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="section" Text="在线席位" />
+              <ListBox Height="230" ItemsSource="{Binding OnlinePositions}" SelectedItem="{Binding SelectedPosition}" />
+              <Button Content="加入收听" Command="{Binding AddOnlinePositionCommand}" />
+            </StackPanel>
+          </Border>
+        </Panel>
+      </StackPanel>
+    </StackPanel>
+
+    <!-- ===== 对话框遮罩层 ===== -->
+    <Panel x:Name="DialogLayer" Background="{DynamicResource Brush.Bg.Overlay}" IsVisible="False" />
+  </Panel>
+</Window>

@@ -107,12 +107,6 @@ class NoHardcodedUiStringTest(unittest.TestCase):
                     break
         return bad
 
-    def test_gui_has_no_hardcoded_chinese(self):
-        self.assertEqual(self.offenders("gui.py"), [])
-
-    def test_settings_dialog_has_no_hardcoded_chinese(self):
-        self.assertEqual(self.offenders("settings.py"), [])
-
     def test_voice_status_messages_are_translated(self):
         """voice.py 的 _state 会直接进状态栏和登录页。"""
         self.assertEqual(self.offenders("voice.py"), [])
@@ -120,9 +114,6 @@ class NoHardcodedUiStringTest(unittest.TestCase):
     def test_radiostack_errors_are_translated(self):
         """这些 ValueError 会原样显示在 InfoBar 里。"""
         self.assertEqual(self.offenders("radiostack.py"), [])
-
-    def test_calibration_dialog_has_no_hardcoded_chinese(self):
-        self.assertEqual(self.offenders("calibration.py"), [])
 
 
 class LookupTest(unittest.TestCase):

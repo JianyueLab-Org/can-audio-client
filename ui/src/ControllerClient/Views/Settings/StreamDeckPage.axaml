@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ControllerClient.ViewModels"
+             x:Class="ControllerClient.Views.Settings.StreamDeckPage"
+             x:DataType="vm:SettingsViewModel">
+  <!-- AFV Stream Deck -->
+  <StackPanel HorizontalAlignment="Left">
+    <CheckBox Content="启用 Stream Deck" IsChecked="{Binding EnableStreamDeck}" />
+  </StackPanel>
+</UserControl>

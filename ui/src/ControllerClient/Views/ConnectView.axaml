@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ControllerClient.ViewModels"
+             x:Class="ControllerClient.Views.ConnectView"
+             x:DataType="vm:ConnectViewModel"
+             Width="300">
+  <!-- 席位呼号与主频率；网络 ID 与密码在“设置 → 用户信息”中填写 -->
+  <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource Space.Md}">
+    <StackPanel>
+      <TextBlock Classes="label" Text="席位呼号" />
+      <TextBox Classes="mono" Text="{Binding Callsign}" PlaceholderText="ZBAA_TWR" MaxLength="12" />
+    </StackPanel>
+    <StackPanel Grid.Column="1">
+      <TextBlock Classes="label" Text="主频率" />
+      <TextBox Classes="mono" Text="{Binding Frequency}" PlaceholderText="118.500" MaxLength="7" />
+    </StackPanel>
+  </Grid>
+</UserControl>

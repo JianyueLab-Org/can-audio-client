@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ControllerClient.ViewModels"
+             x:Class="ControllerClient.Views.Settings.UserPage"
+             x:DataType="vm:SettingsViewModel">
+  <!-- AFV User Details -->
+  <StackPanel Width="200" HorizontalAlignment="Left">
+    <TextBlock Classes="label" Text="CID" />
+    <TextBox Classes="mono" Text="{Binding NetworkId}" />
+    <TextBlock Classes="label" Text="密码" />
+    <TextBox Text="{Binding Password}" PasswordChar="●" />
+    <TextBlock Classes="label" Text="语音服务器" />
+    <TextBox Text="{Binding ServerHost}" />
+    <TextBlock Classes="label" Text="端口" />
+    <NumericUpDown Value="{Binding ServerPort}" Minimum="1" Maximum="65535" />
+    <TextBlock Classes="caption" Text="{Binding StatusText}" TextWrapping="Wrap" />
+  </StackPanel>
+</UserControl>

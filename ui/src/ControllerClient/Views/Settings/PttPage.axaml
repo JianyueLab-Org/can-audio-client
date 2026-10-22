@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ControllerClient.ViewModels"
+             x:Class="ControllerClient.Views.Settings.PttPage"
+             x:DataType="vm:SettingsViewModel">
+  <!-- AFV PTT Settings -->
+  <StackPanel Width="300" HorizontalAlignment="Left">
+    <TextBlock Classes="muted" Text="PTT 绑定" />
+    <TextBlock Classes="caption" Margin="0,6,0,12" TextWrapping="Wrap"
+               Text="可添加多个键盘、鼠标侧键或摇杆按钮。按住任意一个即可发话，全部松开后停止。" />
+    <ItemsControl ItemsSource="{Binding PttBindingItems}" Margin="0,0,0,12" IsEnabled="{Binding CanEditPtt}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:PttBindingViewModel">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,6">
+            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="移除" Classes="danger"
+                    Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RemovePttCommand}"
+                    CommandParameter="{Binding}" />
+          </Grid>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <Button Width="220" HorizontalAlignment="Left" Content="{Binding PttButtonText}" Command="{Binding SetPttCommand}" />
+    <Panel Height="28">
+      <TextBlock Classes="caption" VerticalAlignment="Center"
+                 Text="正在等待按键或按钮……" IsVisible="{Binding IsWaitingForPtt}" />
+    </Panel>
+    <TextBlock Classes="caption" Text="{Binding PttStatusText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+    <Button Width="220" HorizontalAlignment="Left" Content="清除所有 PTT 绑定" IsEnabled="{Binding CanClearPtt}" Command="{Binding ClearPttCommand}" />
+  </StackPanel>
+</UserControl>

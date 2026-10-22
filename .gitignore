@@ -12,3 +12,10 @@ native/rnnoise/work/
 native/rnnoise/out/
 controller/rnnoise.dll
 controller/RNNOISE-COPYING
+**/bin/
+**/obj/
+ui/.git/
+ui/*
+!ui/src/
+ui/src/*
+!ui/src/ControllerClient/

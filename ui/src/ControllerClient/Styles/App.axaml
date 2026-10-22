@@ -1,0 +1,205 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- 业务界面专用样式（呼号、频率、TX/RX 指示灯、面板、频率行、内话按钮）。颜色均来自 Tokens.axaml。 -->
+
+  <!-- 面板容器：工具栏、侧栏、底部按钮栏 -->
+  <Style Selector="Border.toolbar">
+    <Setter Property="Background" Value="{DynamicResource Brush.Bg.Panel}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="{DynamicResource Padding.Toolbar}" />
+  </Style>
+  <Style Selector="Border.sidebar">
+    <Setter Property="Background" Value="{DynamicResource Brush.Bg.Panel}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+  </Style>
+  <Style Selector="Border.footer">
+    <Setter Property="Background" Value="{DynamicResource Brush.Bg.Panel}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="12,8" />
+  </Style>
+  <!-- 面板标题条：与标签栏同高，底部分隔线对齐 -->
+  <Style Selector="Border.paneHeader">
+    <Setter Property="Height" Value="{DynamicResource Size.TabStrip}" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <Style Selector="Border.paneHeader > TextBlock">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <!-- 带边框的列表容器 -->
+  <Style Selector="Border.well">
+    <Setter Property="Background" Value="{DynamicResource Brush.Bg.Control}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border.Control}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+
+  <!-- 呼号 -->
+  <Style Selector="TextBlock.callsign">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Large}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- 无线电面板 -->
+  <Style Selector="TextBlock.frequency">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Medium}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Frequency}" />
+  </Style>
+  <Style Selector="Border.indicator">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Small}" />
+    <Setter Property="Background" Value="{DynamicResource Brush.Bg.Hover}" />
+  </Style>
+  <Style Selector="Border.indicator > TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Dim}" />
+  </Style>
+  <Style Selector="Border.indicator.tx.active">
+    <Setter Property="Background" Value="{DynamicResource Brush.Tx}" />
+  </Style>
+  <Style Selector="Border.indicator.rx.active">
+    <Setter Property="Background" Value="{DynamicResource Brush.Rx}" />
+  </Style>
+  <Style Selector="Border.indicator.active > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
+  </Style>
+  <Style Selector="Border.indicator.off">
+    <Setter Property="Opacity" Value="0.35" />
+  </Style>
+
+  <!-- 下方面板容器（AFV crossCouplePanel / afvPanelWithAPI / afvPanel3） -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource Brush.Bg.Panel}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    <Setter Property="Padding" Value="8" />
+  </Style>
+
+  <!-- 顶部信息值（收发信机来源、最后接收等） -->
+  <Style Selector="TextBlock.info">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Small}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 无线电 TX / RX 指示块与耳机 / 扬声器切换（AFV MetroTile 34×22） -->
+  <Style Selector="Border.indicator.tile">
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="22" />
+  </Style>
+  <Style Selector="ToggleButton.tile">
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Small}" />
+  </Style>
+
+  <!-- 小方形按钮：展开 / 翻页 / 添加（AFV 20×22） -->
+  <Style Selector="Button.mini">
+    <Setter Property="Width" Value="22" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+  </Style>
+  <!-- 频率行删除按钮（AFV ccDelButtons 18×18） -->
+  <Style Selector="Button.del">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="MinHeight" Value="20" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="9" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Muted}" />
+  </Style>
+  <Style Selector="Button.del:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Brush.Danger}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
+  </Style>
+
+  <!-- 频率行（对应 AFV 交叉耦合面板中的每个台站） -->
+  <Style Selector="Border.stationRow">
+    <Setter Property="Background" Value="{DynamicResource Brush.Bg.Control}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border.Control}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="8,0,4,0" />
+  </Style>
+  <Style Selector="Border.stationRow.receiving">
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Rx}" />
+  </Style>
+  <Style Selector="TextBlock.stationName">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Medium}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <!-- TX / RX / XC 开关：选中时以语义色填充 -->
+  <Style Selector="ToggleButton.chan">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Small}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Dim}" />
+  </Style>
+  <Style Selector="ToggleButton.chan:checked">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
+  </Style>
+  <Style Selector="ToggleButton.chan.tx:checked">
+    <Setter Property="Background" Value="{DynamicResource Brush.Tx}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Tx}" />
+  </Style>
+  <Style Selector="ToggleButton.chan.rx:checked">
+    <Setter Property="Background" Value="{DynamicResource Brush.Rx}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Rx}" />
+  </Style>
+  <Style Selector="ToggleButton.chan.xc:checked">
+    <Setter Property="Background" Value="{DynamicResource Brush.Xc}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Xc}" />
+  </Style>
+
+  <!-- 内话按钮（对应 AFV Land Line 按钮，颜色表示呼叫状态） -->
+  <Style Selector="Button.line">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+  </Style>
+  <Style Selector="Button.line.calling">
+    <Setter Property="Background" Value="{DynamicResource Brush.Line.Calling}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line.Calling}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Bg.App}" />
+  </Style>
+  <Style Selector="Button.line.incoming">
+    <Setter Property="Background" Value="{DynamicResource Brush.Line.Incoming}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line.Incoming}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
+  </Style>
+  <Style Selector="Button.line.connected">
+    <Setter Property="Background" Value="{DynamicResource Brush.Line.Connected}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line.Connected}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Bg.App}" />
+  </Style>
+  <Style Selector="Button.line.rejected">
+    <Setter Property="Background" Value="{DynamicResource Brush.Line.Rejected}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line.Rejected}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
+  </Style>
+</Styles>

@@ -1,71 +1,85 @@
 # CAN Audio Client
 
-独立的 CAN 管制语音客户端（Audio for CAN），提供多频率 RX/TX/XC 电台栈、键盘/鼠标/摇杆 PTT、音频设备选择、麦克风校准、中英文界面、窗口置顶和精简模式。
+CAN 管制语音客户端 **0.0.1 预发布版**，使用 C# / .NET 10 / Avalonia 12.1。UI 来自 [can-client-ui](https://github.com/JianyueLab-Org/can-client-ui) 的管制员界面（提交 `ee728d7e775cb692c3d5f6dbf5fd14dd7e9acd0f`）。Mumble、音频和全局输入由无界面的 Python 语音引擎处理。
 
-## 环境与安装
+本仓库仅维护 C# 版本和必要的 Python 语音引擎，不包含旧 Python GUI、飞行员或 ATIS 客户端。
 
-- Windows x64，Python **3.12**，Git（安装固定提交的 `pymumble-udp` 依赖需要）。
-- `controller/opus.dll` 已包含在项目中。
-- 可选的 RNNoise 降噪库见下方说明；缺少该库时仍可正常收发语音。
+## 下载和运行
 
-在项目根目录执行：
+在 [Releases](https://github.com/JianyueLab-Org/can-audio-client/releases) 下载 `can-audio-client-0.0.1-win-x64.zip`，解压后运行 `ControllerClient.exe`。需要 Windows x64；发行包自带 .NET 运行时和打包语音引擎，**无需安装 .NET 或 Python**。
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe run.py
+```text
+can-audio-client-0.0.1-win-x64/
+  ControllerClient.exe
+  controller/
+    can-voice.exe
+  README.md
 ```
 
-`run.py` 会设置 Opus 库搜索路径及客户端工作目录，也支持从其他目录用绝对路径启动。调试日志可用 `python run.py --debug` 开启。设置保存在 `controller/radio_settings.json`，日志为 `controller/audio-for-can.log`。
+保留整个目录，不要单独复制 EXE。
 
 ## 使用
 
-1. 在登录页的设置中选择语音服务器，或填写自定义主机和端口（默认 `64738`）。
-2. 选择麦克风、扬声器并设置 PTT（默认 `V`）；按需执行麦克风校准。
-3. 用 CAN 账号连接，添加频率，或点击在线席位将其加入电台栈。
-4. RX 控制收听，TX 控制发话目标，XC 用于跨频耦合，按住 PTT 发话。
+1. 在「设置 → 用户信息」填写 CAN ID、密码、语音服务器和端口（默认 `audio.ceruleanavi.net:64738`）。
+2. 在音频页选择麦克风和输出设备。
+3. PTT 默认 V。点击「添加 PTT 按键或按钮」可添加多个键盘、鼠标侧键、摇杆按钮，支持去重、逐条删除、清空；点击「应用」或「确定」保存。任意一个按住即可发话，所有绑定松开后停止。
+4. 点击连接。本人在 CAN 数据源中正在管制的频率自动加入并开启 TX；未上席位或数据源更新失败时仅收听。
+5. 从在线席位加入收听，或手动输入频率 / 在线呼号；RX 控制收听、TX 控制发话目标、XC 控制跨频耦合。
 
-客户端默认连接 CAN 网络，仍需要可用的 Mumble 语音服务和账号。多频率监听需要 Mumble 1.4+ 及相应频道权限；服务端支持时使用 UDP 音频，否则回退 TCP。
+多频率监听需要 Mumble 1.4+ 和相应频道权限。支持 UDP 音频，不可用时回退 TCP；断线有限重连，被踢后不自动抢回登录。
 
-**保留了原客户端的席位规则：** CAN 数据源确认账号正在有效管制席位时才允许 TX；未上席位时只能收听。这个程序本身不负责登录 FSD 或建立管制席位。独立运行指无需原源码仓库或其他客户端，并非离线语音服务。
+## 状态、设置与日志
 
-为避免独立版本提示下载旧项目的发行包，默认关闭原更新检查。服务器列表和在线席位数据仍使用 CAN 的网络接口。
+- 主窗口顶部及置顶小窗显示实时语音状态，格式为「已连接 · UDP/TCP · 23 ms」。每秒读取语音引擎的真实平均 Ping RTT，无样本时显示 `-- ms`。
+- FSD 状态每 15 秒依据 CAN 数据源确认账号在线情况，并标注「数据源确认」。本程序不直接建立 FSD 会话，不替代 EuroScope 等客户端上席位。HTTP 请求耗时单独显示，不当作 FSD 延迟。
+- 设置位于 `%LOCALAPPDATA%/CAN/AudioClient/settings.json`。密码仅保存在内存，麦克风会话增益每次启动恢复默认值。
+- 日志位于 **EXE 所在目录的 `logs/`**，点击「日志」按钮打开。主程序与语音分别写入 `client-YYYY-MM-DD-启动时间-PID.log`、`voice-YYYY-MM-DD-启动时间-PID.log`，跨日自动换文件、多实例分别记录，不记录连接请求密码。
 
-## 可选：麦克风降噪
+## 从源码运行
 
-需要 CMake 和 Visual Studio C++ x64 构建工具，在根目录执行：
+需要 .NET 10 SDK、Python 3.12 x64、Git：
 
 ```powershell
-pwsh -File native/rnnoise/build.ps1 -Out controller
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-voice.txt
+dotnet build CanAudio.slnx
+pwsh -File ./run-csharp.ps1
 ```
 
-脚本下载并校验 RNNoise v0.2，生成 `controller/rnnoise.dll` 和 `controller/RNNOISE-COPYING`。重启客户端后即可使用降噪。
+默认使用本项目 `.venv/Scripts/python.exe`；设置 `CAN_PYTHON` 可指定其他 Python。发行包默认优先使用 `controller/can-voice.exe`。语音引擎不依赖 Qt。
 
-## 本地打包
+## 验证与编译
+
+```powershell
+dotnet run --project tests/ControllerClient.Checks -c Release
+.\.venv\Scripts\python.exe -m unittest discover -s controller -v
+```
+
+仅编译 C# 单文件程序（仍需本地 Python 环境）：
+
+```powershell
+pwsh -File ./build.ps1
+```
+
+输出 `dist/CanAudio-singlefile/`。使用 .NET 10 自包含单文件发布、压缩、原生库自解压，托管 DLL 合并到 EXE；不裁剪反射所需类型。
+
+生成完整便携发行包（含 PyInstaller 打包的单文件语音引擎）：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
-cd controller
-..\.venv\Scripts\python.exe -m PyInstaller --noconfirm gui.spec
+.\.venv\Scripts\python.exe ./package-release.py
 ```
 
-产物为 `controller/dist/audio-for-can/`。分发整个目录，运行其中的 `audio-for-can.exe`；不能只复制 exe。Opus 和 Qt 库会随包分发；RNNoise 已构建时也会随包带上。
+输出 `dist/can-audio-client-0.0.1-win-x64.zip` 和 SHA-256 校验文件。
 
-版本号在 `controller/version.py` 中维护。本地正式打包时可先设置 `$env:CAN_VERSION = "2.2.0"`，版本信息会固化到包中，不需要 CI 或原仓库的 Git 历史。
+可选降噪库：使用 CMake 和 Visual Studio C++ x64 工具执行 `pwsh -File native/rnnoise/build.ps1 -Out controller`；存在 `rnnoise.dll` 时发行脚本会自动包含。缺少该库时语音正常收发，降噪不可用。
 
-## 验证
+## 预发布范围
 
-在项目根目录打开 PowerShell：
+已接入真实连接、设备枚举、音量、多个 PTT、席位规则、多频率 RX/TX/XC、收发指示、呼号映射、连接状态与延迟、置顶小窗及按日日志。
 
-```powershell
-$env:PATH = "$PWD\controller;$env:PATH"
-cd controller
-..\.venv\Scripts\python.exe -m unittest discover -v
-..\.venv\Scripts\python.exe smoke_gui.py
-```
-
-测试覆盖电台栈、语音协议兼容、设置、设备校准、PTT 等，GUI 冒烟检查使用离屏窗口，不需要登录服务器。
+自动麦克风校准、中英文界面切换和服务器目录选择尚未迁入。压缩参数由现有 Mumble 引擎管理；内话、地图、UniATIS、Stream Deck 尚未接入。真实服务器双向通话及网络切换需在实际账号环境中验证。
 
 ## 来源
 
-客户端提取自 `JianyueLab-Org/can-audio` 的 `controller/`，已同步至源提交 `e724bff58ddad12eb965aba79817b4b58b30b489`。保留客户端代码、图标、Opus 库、客户端测试及可选 RNNoise 构建支持。本项目使用自身 Git 仓库，不包含源仓库历史、服务端、其他客户端或 CI 工作流。
+Python 语音引擎提取自 `JianyueLab-Org/can-audio` 的 `controller/`（源提交 `e724bff58ddad12eb965aba79817b4b58b30b489`）。仅保留 C# 客户端所需模块、Opus 库、相关测试和可选 RNNoise 构建支持。

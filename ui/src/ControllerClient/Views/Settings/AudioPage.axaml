@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ControllerClient.ViewModels"
+             x:Class="ControllerClient.Views.Settings.AudioPage"
+             x:DataType="vm:SettingsViewModel">
+  <!-- AFV Audio Settings -->
+  <StackPanel Width="340" HorizontalAlignment="Left">
+    <TextBlock Classes="label" Text="麦克风设备" />
+    <ComboBox ItemsSource="{Binding InputDevices}" SelectedItem="{Binding InputDeviceName}" HorizontalAlignment="Stretch" />
+    <TextBlock Classes="label" Text="耳机设备" />
+    <ComboBox ItemsSource="{Binding OutputDevices}" SelectedItem="{Binding HeadsetDeviceName}" HorizontalAlignment="Stretch" />
+    <TextBlock Classes="label" Text="扬声器设备（可选）" />
+    <ComboBox ItemsSource="{Binding SpeakerDevices}" SelectedItem="{Binding SpeakerDeviceName}" HorizontalAlignment="Stretch" />
+
+    <Grid ColumnDefinitions="72,*,32" RowDefinitions="Auto,Auto" Margin="0,10,0,0">
+      <TextBlock Classes="muted" Text="麦克风音量" VerticalAlignment="Center" />
+      <Slider Grid.Column="1" Minimum="-72" Maximum="72" TickFrequency="1" IsSnapToTickEnabled="True"
+              Value="{Binding InputVolume}" />
+      <TextBlock Grid.Column="2" Classes="mono" Text="{Binding InputVolumeText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+
+      <TextBlock Grid.Row="1" Classes="muted" Text="输出音量" VerticalAlignment="Center" />
+      <Slider Grid.Row="1" Grid.Column="1" Minimum="-72" Maximum="72" TickFrequency="1" IsSnapToTickEnabled="True"
+              Value="{Binding OutputVolume}" />
+      <TextBlock Grid.Row="1" Grid.Column="2" Classes="mono" Text="{Binding OutputVolumeText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+    </Grid>
+
+    <!-- 输入电平表（AFV LevelMeter）：中段为合适音量区间 -->
+    <Grid Margin="72,6,32,0" Height="6" IsVisible="False">
+      <Grid ColumnDefinitions="45*,35*,20*" ColumnSpacing="2">
+        <Border CornerRadius="2" Background="{DynamicResource Brush.Bg.Hover}" />
+        <Border Grid.Column="1" CornerRadius="2" Background="{DynamicResource Brush.Bg.Active}" />
+        <Border Grid.Column="2" CornerRadius="2" Background="{DynamicResource Brush.Bg.Hover}" />
+      </Grid>
+      <ProgressBar Value="{Binding InputLevel}" Maximum="100" MinHeight="6" Height="6"
+                   Background="Transparent" Foreground="{DynamicResource Brush.Success}" />
+    </Grid>
+    <TextBlock Classes="caption" Margin="72,8,0,0" TextWrapping="Wrap"
+               Text="音量为 dB 增益。语音引擎会自动限幅；RNNoise 库存在时可启用降噪。" />
+
+    <CheckBox Margin="0,10,0,0" Content="禁用麦克风降噪" IsChecked="{Binding DisableAudioEffects}" />
+
+    <!-- 压缩：编码质量与每包音频时长，默认 100 kb/s、40 ms -->
+    <TextBlock Classes="section" Text="压缩" Margin="0,16,0,4" />
+    <TextBlock Classes="caption" Text="编码由当前 Mumble 引擎管理，暂不支持在界面调整。" TextWrapping="Wrap" />
+    <Grid ColumnDefinitions="72,*,72" RowDefinitions="Auto,Auto" IsEnabled="False">
+      <TextBlock Classes="muted" Text="质量" VerticalAlignment="Center" />
+      <Slider Grid.Column="1" Minimum="8" Maximum="192" TickFrequency="1" IsSnapToTickEnabled="True"
+              Value="{Binding AudioQualityKbps}" />
+      <TextBlock Grid.Column="2" Classes="mono" Text="{Binding AudioQualityText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+
+      <TextBlock Grid.Row="1" Classes="muted" Text="每包音频" VerticalAlignment="Center" />
+      <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="3" TickFrequency="1" IsSnapToTickEnabled="True"
+              Value="{Binding PacketDurationIndex}" />
+      <TextBlock Grid.Row="1" Grid.Column="2" Classes="mono" Text="{Binding PacketDurationText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+    </Grid>
+    <CheckBox Margin="0,4,0,0" Content="允许低延迟模式" IsChecked="{Binding AllowLowDelayMode}" IsEnabled="False" />
+    <TextBlock Classes="caption mono" Margin="0,6,0,0" TextWrapping="Wrap" Text="{Binding BitrateSummary}" />
+  </StackPanel>
+</UserControl>

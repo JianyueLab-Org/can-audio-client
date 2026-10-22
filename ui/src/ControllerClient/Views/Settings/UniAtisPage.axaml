@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ControllerClient.ViewModels"
+             x:Class="ControllerClient.Views.Settings.UniAtisPage"
+             x:DataType="vm:SettingsViewModel">
+  <!-- AFV UniATIS Integration -->
+  <StackPanel Width="320" HorizontalAlignment="Left">
+    <CheckBox Content="启用 UniATIS" IsChecked="{Binding EnableUniAtis}" />
+    <StackPanel IsEnabled="{Binding EnableUniAtis}">
+      <TextBlock Classes="label" Text="ATIS.TXT 位置" />
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Sm}">
+        <TextBox Classes="mono" Text="{Binding AtisTextPath}" IsReadOnly="True" />
+        <Button Grid.Column="1" Content="浏览…" />
+      </Grid>
+      <TextBlock Classes="label" Text="音频文件位置" />
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Sm}">
+        <TextBox Classes="mono" Text="{Binding AtisSoundPath}" IsReadOnly="True" />
+        <Button Grid.Column="1" Content="浏览…" />
+      </Grid>
+    </StackPanel>
+  </StackPanel>
+</UserControl>
