@@ -10,12 +10,12 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <AssemblyName>ControllerClient</AssemblyName>
     <RootNamespace>ControllerClient</RootNamespace>
-    <Version>0.0.1</Version>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="app.ico" />
-    <Content Include="../../../controller/bridge.py;../../../controller/connectionstatus.py;../../../controller/voice.py;../../../controller/ptt.py;../../../controller/radiostack.py;../../../controller/rxmix.py;../../../controller/denoise.py;../../../controller/micgain.py;../../../controller/mumblecompat.py;../../../controller/i18n.py;../../../controller/*.dll">
+    <Content Include="../../../controller/bridge.py;../../../controller/connectionstatus.py;../../../controller/voice.py;../../../controller/syncplan.py;../../../controller/rxmix.py;../../../controller/denoise.py;../../../controller/micgain.py;../../../controller/mumblecompat.py;../../../controller/i18n.py;../../../controller/*.dll">
       <Link>controller/%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -26,6 +26,9 @@
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.0" />
     <PackageReference Include="Avalonia.Themes.Simple" Version="12.1.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <!-- 摇杆 PTT：SDL2 原生库，设备 / 按钮序号与旧 pygame 引擎一致 -->
+    <PackageReference Include="Ultz.Native.SDL" Version="2.32.10" />
+    <InternalsVisibleTo Include="ControllerClient.Checks" />
   </ItemGroup>
 
   <Target Name="ExcludeNativeDebugSymbols" AfterTargets="ComputeFilesToPublish" Condition="'$(PublishSingleFile)' == 'true'">

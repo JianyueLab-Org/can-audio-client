@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ControllerClient.Services;
+using ControllerClient.Services.Ptt;
 
 namespace ControllerClient.ViewModels;
 
@@ -16,6 +17,8 @@ public sealed partial class MainWindowViewModel
     private readonly DispatcherTimer _syncTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private readonly Dictionary<string, int> _inputs = [];
     private readonly Dictionary<string, int> _outputs = [];
+    private PttWatcher _ptt = null!;
+    private PttCapture? _capture;
     private bool _refreshing;
     private bool _applyingDuty;
     private bool _allowed;
@@ -29,6 +32,8 @@ public sealed partial class MainWindowViewModel
 
     private void InitializeBackend()
     {
+        // PTT 在 C# 里监听，翻转时只给语音引擎发一条 ptt 指令；松开优先级最高，不能被排在别的 UI 工作后面
+        _ptt = new PttWatcher([], active => Dispatcher.UIThread.Post(() => OnPtt(active), DispatcherPriority.Send));
         ConfigureSettings(Settings);
         _bridge.Message += msg => Dispatcher.UIThread.Post(() => HandleMessage(msg));
         _feedTimer.Tick += async (_, _) => await RefreshFeedAsync();
@@ -38,13 +43,19 @@ public sealed partial class MainWindowViewModel
 
     private void ConfigureSettings(SettingsViewModel model)
     {
-        model.BridgeCommand = async command => { await _bridge.SendAsync(command); };
+        model.CapturePtt = start =>
+        {
+            if (start) StartPttCapture();
+            else StopPttCapture();
+            return Task.CompletedTask;
+        };
         model.Apply = () => { Settings = model; ConfigureSettings(model); _ = ApplyAudioAsync(); };
     }
 
     public async Task<SettingsViewModel> OpenSettingsAsync()
     {
         _settingsOpen = true;
+        _ptt.Stop();
         await ExecuteAsync("ptt", new { active = false });
         var model = new SettingsViewModel { Password = Settings.Password };
         Settings = model;
@@ -69,7 +80,7 @@ public sealed partial class MainWindowViewModel
 
     public async Task CloseSettingsAsync()
     {
-        await ExecuteAsync("cancel_capture");
+        StopPttCapture();
         Settings = new SettingsViewModel { Password = Settings.Password };
         ConfigureSettings(Settings);
         _settingsOpen = false;
@@ -117,7 +128,8 @@ public sealed partial class MainWindowViewModel
 
     private async Task ApplyAudioAsync()
     {
-        await ExecuteAsync("watch", new { bindings = Settings.PttBindings });
+        _ptt.SetBindings(Settings.PttBindingModels);
+        if (!_settingsOpen) _ptt.Start();
         if (!IsConnected) return;
         await ExecuteAsync("audio", new { mic = Math.Min(200, 100 * Math.Pow(10, Settings.InputVolume / 20)),
             speaker = Math.Min(200, 100 * Math.Pow(10, Settings.OutputVolume / 20)), denoise = !Settings.DisableAudioEffects,
@@ -217,12 +229,49 @@ public sealed partial class MainWindowViewModel
     private async Task SyncAsync()
     {
         if (!IsConnected) return;
-        var radios = Stations.Select(s => new { frequency = NetworkDirectory.ParseFrequency(s.Frequency), callsign = s.Name,
-            rx = s.IsRx, tx = _allowed && s.IsTx, xc = _allowed && s.IsCrossCoupled, volume = 100, muted = false }).ToArray();
-        var primary = Stations.FirstOrDefault(s => s.IsPrimary);
-        await ExecuteAsync("sync", new { radios, allowed = _allowed,
-            locked = Stations.Where(s => s.IsPrimary).Select(s => NetworkDirectory.ParseFrequency(s.Frequency)).ToArray(),
-            selected = primary is null ? (int?)null : NetworkDirectory.ParseFrequency(primary.Frequency) });
+        var plan = BuildSyncPlan(Stations, _allowed);
+        // 语音引擎照着计划进频道、挂监听、编 VoiceTarget；TX 为空时它会自己松开发话
+        await ExecuteAsync("sync", new { rx = plan.Rx, tx = plan.Tx, xc = plan.Xc, selected = plan.Selected,
+            locked = plan.Locked, volumes = plan.Volumes });
+    }
+
+    /// <summary>界面上的台站 → 推给语音引擎的计划。值守规则全在 <see cref="RadioStack"/> 里。</summary>
+    internal static VoiceSyncPlan BuildSyncPlan(IEnumerable<StationViewModel> stations, bool allowed)
+    {
+        var list = stations.ToList();
+        var stack = new RadioStack();
+        stack.Load(list.Select(s => new Radio(NetworkDirectory.ParseFrequency(s.Frequency), s.Name)
+            { Rx = s.IsRx, Tx = s.IsTx, Xc = s.IsCrossCoupled }));
+        stack.SelectedKhz = list.FirstOrDefault(s => s.IsPrimary) is { } primary ? NetworkDirectory.ParseFrequency(primary.Frequency) : null;
+        stack.SetLocked(list.Where(s => s.IsPrimary).Select(s => NetworkDirectory.ParseFrequency(s.Frequency)));
+        stack.SetTransmitAllowed(allowed);
+        return stack.ToSyncPlan();
+    }
+
+    private void OnPtt(bool active)
+    {
+        // 松开永远要送到：设置窗口打开时只挡按下
+        if (IsConnected && (!active || !_settingsOpen)) _ = ExecuteAsync("ptt", new { active = _allowed && active });
+    }
+
+    private void StartPttCapture()
+    {
+        _capture?.Stop();
+        _ptt.Stop(); // 录制时按下的那一下不能真的发出去
+        _capture = new PttCapture(binding => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_settingsOpen || !Settings.IsWaitingForPtt) return;
+            Settings.AddPttBinding(binding);
+            Settings.IsWaitingForPtt = false;
+            StopPttCapture();
+        }));
+        _capture.Start();
+    }
+
+    private void StopPttCapture()
+    {
+        _capture?.Stop();
+        _capture = null;
     }
 
     private async Task ExecuteAsync(string command, object? data = null)
@@ -266,21 +315,14 @@ public sealed partial class MainWindowViewModel
                 if (msg.GetProperty("active").GetBoolean()) { LastReceivedFrequency = frequency; LastReceivedCallsign = callsign; }
                 break;
             case "tx": IsTransmitting = msg.GetProperty("active").GetBoolean(); break;
-            case "ptt":
-                if (!_settingsOpen && IsConnected) _ = ExecuteAsync("ptt", new { active = _allowed && msg.GetProperty("active").GetBoolean() });
-                break;
-            case "captured":
-                if (!_settingsOpen || !Settings.IsWaitingForPtt) break;
-                Settings.AddPttBinding(msg.GetProperty("binding"));
-                Settings.IsWaitingForPtt = false;
-                _ = ExecuteAsync("cancel_capture");
-                break;
         }
     }
 
     public async ValueTask DisposeAsync()
     {
         _feedTimer.Stop(); _syncTimer.Stop(); _directory.Dispose();
+        StopPttCapture();
+        _ptt.Dispose();
         await _bridge.DisposeAsync();
     }
 }

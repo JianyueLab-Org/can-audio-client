@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using ControllerClient.Services;
+using ControllerClient.Services.Ptt;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -25,7 +26,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
             RefreshPttBindings();
         }
     }
-    public Func<string, Task>? BridgeCommand { get; set; }
+    /// <summary>开始（true）或取消（false）录制一条 PTT 绑定。</summary>
+    public Func<bool, Task>? CapturePtt { get; set; }
     public Action? Apply { get; set; }
     [ObservableProperty] private string _serverHost = "audio.ceruleanavi.net";
     [ObservableProperty] private int _serverPort = 64738;
@@ -76,7 +78,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public string InputVolumeText => ((int)InputVolume).ToString("+#;-#;0");
     public string OutputVolumeText => ((int)OutputVolume).ToString("+#;-#;0");
 
-    /// <summary>麦克风峰值电平（0~100），演示用。</summary>
+    /// <summary>麦克风峰值电平（0~100），电平表尚未接入语音引擎。</summary>
     [ObservableProperty] private double _inputLevel;
 
     [ObservableProperty] private bool _disableAudioEffects;
@@ -128,7 +130,15 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public bool CanEditPtt => !IsWaitingForPtt;
     [ObservableProperty] private string _pttStatusText = "";
 
+    public IReadOnlyList<PttBinding> PttBindingModels => PttBindingItems.Select(item => item.Model).ToList();
+
     public void AddPttBinding(JsonElement binding)
+    {
+        if (PttBinding.FromJson(binding) is { } model) AddPttBinding(model);
+        else PttStatusText = "无法识别的 PTT 绑定，已忽略。";
+    }
+
+    public void AddPttBinding(PttBinding binding)
     {
         var item = new PttBindingViewModel(binding);
         if (PttBindingItems.Any(existing => existing.Identity == item.Identity))
@@ -153,11 +163,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     {
         try
         {
-            if (BridgeCommand is null) return;
+            if (CapturePtt is null) return;
             var cancel = IsWaitingForPtt;
             IsWaitingForPtt = !cancel;
             PttStatusText = "";
-            await BridgeCommand(cancel ? "cancel_capture" : "capture");
+            await CapturePtt(!cancel);
         }
         catch (Exception ex) { PttStatusText = ex.Message; IsWaitingForPtt = false; }
     }

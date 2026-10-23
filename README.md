@@ -1,15 +1,15 @@
 # CAN Audio Client
 
-CAN 管制语音客户端 **0.0.1 预发布版**，使用 C# / .NET 10 / Avalonia 12.1。UI 来自 [can-client-ui](https://github.com/JianyueLab-Org/can-client-ui) 的管制员界面（提交 `ee728d7e775cb692c3d5f6dbf5fd14dd7e9acd0f`）。Mumble、音频和全局输入由无界面的 Python 语音引擎处理。
+CAN 管制语音客户端 **1.0.0 正式版**，使用 C# / .NET 10 / Avalonia 12.1。UI 来自 [can-client-ui](https://github.com/JianyueLab-Org/can-client-ui) 的管制员界面（提交 `ee728d7e775cb692c3d5f6dbf5fd14dd7e9acd0f`）。PTT 全局输入（键盘、鼠标侧键、摇杆）、电台栈规则、席位数据和设置均在 C# 中实现；仅 Mumble 连接与音频收发由无界面的 Python 语音引擎处理，协议见 [controller/README.md](controller/README.md)。
 
 本仓库仅维护 C# 版本和必要的 Python 语音引擎，不包含旧 Python GUI、飞行员或 ATIS 客户端。
 
 ## 下载和运行
 
-在 [Releases](https://github.com/JianyueLab-Org/can-audio-client/releases) 下载 `can-audio-client-0.0.1-win-x64.zip`，解压后运行 `ControllerClient.exe`。需要 Windows x64；发行包自带 .NET 运行时和打包语音引擎，**无需安装 .NET 或 Python**。
+在 [Releases](https://github.com/JianyueLab-Org/can-audio-client/releases) 下载 `can-audio-client-1.0.0-win-x64.zip`，解压后运行 `ControllerClient.exe`。需要 Windows x64；发行包自带 .NET 运行时和打包语音引擎，**无需安装 .NET 或 Python**。
 
 ```text
-can-audio-client-0.0.1-win-x64/
+can-audio-client-1.0.0-win-x64/
   ControllerClient.exe
   controller/
     can-voice.exe
@@ -41,12 +41,13 @@ can-audio-client-0.0.1-win-x64/
 
 ```powershell
 py -3.12 -m venv .venv
+$env:PYTHONUTF8 = 1
 .\.venv\Scripts\python.exe -m pip install -r requirements-voice.txt
 dotnet build CanAudio.slnx
 pwsh -File ./run-csharp.ps1
 ```
 
-默认使用本项目 `.venv/Scripts/python.exe`；设置 `CAN_PYTHON` 可指定其他 Python。发行包默认优先使用 `controller/can-voice.exe`。语音引擎不依赖 Qt。
+默认使用本项目 `.venv/Scripts/python.exe`；设置 `CAN_PYTHON` 可指定其他 Python。发行包默认优先使用 `controller/can-voice.exe`。语音引擎不依赖 Qt、pynput 或 pygame；摇杆通过 C# 直接调用随包的 SDL2，设备和按钮序号与旧版一致。
 
 ## 验证与编译
 
@@ -67,18 +68,18 @@ pwsh -File ./build.ps1
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
-.\.venv\Scripts\python.exe ./package-release.py
+pwsh -File ./package-release.ps1
 ```
 
-输出 `dist/can-audio-client-0.0.1-win-x64.zip` 和 SHA-256 校验文件。
+输出 `dist/can-audio-client-1.0.0-win-x64.zip` 和 SHA-256 校验文件。
 
 可选降噪库：使用 CMake 和 Visual Studio C++ x64 工具执行 `pwsh -File native/rnnoise/build.ps1 -Out controller`；存在 `rnnoise.dll` 时发行脚本会自动包含。缺少该库时语音正常收发，降噪不可用。
 
-## 预发布范围
+## 功能范围
 
 已接入真实连接、设备枚举、音量、多个 PTT、席位规则、多频率 RX/TX/XC、收发指示、呼号映射、连接状态与延迟、置顶小窗及按日日志。
 
-自动麦克风校准、中英文界面切换和服务器目录选择尚未迁入。压缩参数由现有 Mumble 引擎管理；内话、地图、UniATIS、Stream Deck 尚未接入。真实服务器双向通话及网络切换需在实际账号环境中验证。
+自动麦克风校准、中英文界面切换和服务器目录选择尚未迁入。压缩参数由现有 Mumble 引擎管理；内话、地图、UniATIS、Stream Deck 尚未接入。
 
 ## 来源
 

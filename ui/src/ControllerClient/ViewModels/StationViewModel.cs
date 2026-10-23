@@ -66,7 +66,7 @@ public sealed partial class StationViewModel : ViewModelBase
             IsTx = true;
     }
 
-    /// <summary>当前正在此频率上发射的呼号（演示数据），为空表示无人发射。</summary>
+    /// <summary>当前正在此频率上发射的呼号，为空表示无人发射。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsReceiving))]
     private string? _receivingCallsign;

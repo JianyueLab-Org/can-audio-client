@@ -11,37 +11,16 @@ namespace ControllerClient.ViewModels;
 /// 主界面状态，与 AudioForVATSIM MainForm（ATC 模式）一致：
 /// 顶部为按钮、席位呼号、无线电 TX/RX 与收发信机信息；“+/-”展开下方的
 /// 频率（交叉耦合）面板与内话 / 附加收发信机面板；“↑”切换为置顶小窗。
-/// 语音服务器连接、接收与内话均为演示数据。
 /// </summary>
 public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposable
 {
-    /// <summary>演示用台站数据库：按呼号添加频率时在这里查找。</summary>
-    private static readonly Dictionary<string, (string Frequency, string? Alias)> KnownStations = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["ZBAA_DEL"] = ("121.950", null),
-        ["ZBAA_GND"] = ("121.700", null),
-        ["ZBAA_TWR"] = ("118.500", null),
-        ["ZBAA_APP"] = ("119.000", null),
-        ["ZBAA_ATIS"] = ("127.600", null),
-        ["ZBAD_TWR"] = ("118.350", null),
-        ["ZBPE_CTR"] = ("125.300", null),
-        ["ZBPE_FSS"] = ("5.655", "131.050"),
-        ["ZSSS_TWR"] = ("118.250", null),
-        ["ZGGG_APP"] = ("120.400", null)
-    };
-
-    private static readonly string[] DemoTraffic = ["CCA1501", "CES5101", "CSN3101", "CHH7845", "CXA8302", "CPA112"];
-
-    private readonly DispatcherTimer _rxTimer = new() { Interval = TimeSpan.FromSeconds(2.5) };
-    private readonly Random _random = new();
-
     public MainWindowViewModel()
     {
         Stations.CollectionChanged += (_, _) => RefreshStationPage();
         InitializeBackend();
     }
 
-    public string VersionText => "CAN Audio · 0.0.1";
+    public string VersionText => "CAN Audio · 1.0.0";
 
     // —— 连接 ——
     [ObservableProperty]
@@ -55,7 +34,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CallsignText))]
-    private string _callsign = "ZBAA_TWR";
+    private string _callsign = "";
 
     public string ConnectButtonText => IsConnecting ? "正在连接…" : IsConnected ? "断开" : "连接";
     public string CallsignText => IsConnected ? Callsign : "未连接";
@@ -70,7 +49,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
         _ = ExecuteAsync("disconnect");
         ConnectionStatus.SetVoiceState("stopped");
         AppLog.Info("用户断开语音连接");
-        _rxTimer.Stop();
         IsConnected = false;
         Stations.Clear();
         TransceiverSource = "- - - -";
@@ -108,7 +86,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
     public bool ShowAdditionalTransceivers => !HasApiData;
 
     // —— 无线电指示（AFV “Radio:” com1TxTile / com1RxTile / AudioSourceTile） ——
-    /// <summary>正在发射：按住 PTT（演示为右 Ctrl）。</summary>
+    /// <summary>正在发射：语音引擎回报的真实发话状态。</summary>
     [ObservableProperty] private bool _isTransmitting;
 
     [ObservableProperty] private bool _isReceiving;
@@ -254,36 +232,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
         }
     }
 
-    private void AddKnownStation(string name, bool rx)
-    {
-        var (frequency, alias) = KnownStations[name];
-        Stations.Add(new StationViewModel(name.ToUpperInvariant(), frequency, alias) { IsRx = rx });
-    }
-
-    /// <summary>演示：随机让一个已打开 RX 的频率接收一段通话。</summary>
-    private void SimulateReception()
-    {
-        // 演示：偶尔有内话来电
-        if (HasApiData && ActiveLine is null && _random.Next(8) == 0)
-            SimulateIncomingCall();
-
-        foreach (var s in Stations)
-            s.ReceivingCallsign = null;
-        IsReceiving = false;
-
-        var candidates = Stations.Where(s => s.IsRx).ToList();
-        if (candidates.Count == 0 || _random.Next(3) == 0)
-            return;
-
-        IsReceiving = true;
-
-        var station = candidates[_random.Next(candidates.Count)];
-        var callsign = DemoTraffic[_random.Next(DemoTraffic.Length)];
-        station.ReceivingCallsign = callsign;
-        LastReceivedFrequency = station.Frequency;
-        LastReceivedCallsign = callsign;
-    }
-
     // —— 内话（AFV Land Line Calling，每页 10 个） ——
     private const int LandlinesPerPage = 10;
 
@@ -314,7 +262,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
 
     /// <summary>点击内话按钮：空闲时发起呼叫，否则挂断（同 AFV HandleLLButtonPress）。</summary>
     [RelayCommand]
-    private async Task PressLine(LandlineViewModel line)
+    private void PressLine(LandlineViewModel line)
     {
         if (!IsConnected)
             return;
@@ -328,11 +276,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
 
         line.State = LandlineState.Calling;
         ActiveLine = line;
-
-        // 演示：对方 2 秒后接听
-        await Task.Delay(2000);
-        if (ActiveLine == line && line.State == LandlineState.Calling)
-            line.State = LandlineState.Connected;
         RefreshCallCommands();
     }
 
@@ -361,17 +304,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
         ActiveLine = null;
     }
 
-    /// <summary>演示：模拟一个来电。</summary>
-    private void SimulateIncomingCall()
-    {
-        if (!IsConnected || ActiveLine is not null)
-            return;
-
-        var line = Landlines[_random.Next(Landlines.Count)];
-        line.State = LandlineState.Incoming;
-        ActiveLine = line;
-    }
-
     private void RefreshCallCommands()
     {
         AcceptCallCommand.NotifyCanExecuteChanged();
@@ -380,7 +312,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
     }
 
     // —— 附加机场收发信机（AFV Additional Airport Transceivers） ——
-    public ObservableCollection<string> AdditionalTransceivers { get; } = ["ZBAD"];
+    public ObservableCollection<string> AdditionalTransceivers { get; } = [];
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddTransceiverCommand))]

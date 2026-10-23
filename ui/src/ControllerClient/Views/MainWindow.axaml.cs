@@ -49,17 +49,6 @@ public partial class MainWindow : Window
             BeginMoveDrag(e);
     }
 
-    // 演示 PTT：按住右 Ctrl 发射（与设置里的默认 PTT 分配一致）
-    protected override void OnKeyDown(KeyEventArgs e)
-    {
-        base.OnKeyDown(e);
-    }
-
-    protected override void OnKeyUp(KeyEventArgs e)
-    {
-        base.OnKeyUp(e);
-    }
-
     private void OnMinimizeClick(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void OnExitClick(object? sender, RoutedEventArgs e) => Close();

@@ -2,5 +2,3 @@
 pymumble-udp @ git+https://github.com/JianyueLab-Org/pymumble_udp.git@168f2c846d37088902bbfe48f8ea76cb95bf7dd7
 PyAudio
 numpy
-pynput
-pygame

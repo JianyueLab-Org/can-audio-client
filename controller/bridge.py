@@ -1,4 +1,7 @@
-"""C# 客户端的 JSON Lines 语音进程；stdout 仅用于协议，日志写 stderr。"""
+"""C# 客户端的 JSON Lines 语音进程；stdout 仅用于协议，日志写 stderr。
+
+协议见同目录 README.md。PTT 输入、电台栈规则都在 C# 里，这里只管语音。
+"""
 import json
 import logging
 import os
@@ -27,12 +30,9 @@ def emit(**data):
 
 def main():
     import pyaudio
-    import ptt
-    import radiostack
+    from syncplan import SyncPlan
     from voice import VoiceClient
     client = None
-    watcher = None
-    capture = None
     stop_status = threading.Event()
 
     def publish_status():
@@ -73,15 +73,11 @@ def main():
                     client._output_device = data.get('output')
                     result = client.connect()
                 elif command == 'sync' and client:
-                    stack = radiostack.RadioStack()
-                    stack.load(data['radios'])
-                    stack.selected_khz = data.get('selected')
-                    stack.set_locked(data.get('locked', []))
-                    stack.set_transmit_allowed(data['allowed'])
-                    if not data['allowed'] or not stack.tx_frequencies():
+                    plan = SyncPlan.from_dict(data)
+                    if not plan.tx_frequencies():
                         client.stop_transmit()
                     # 频道同步会等待网络往返，不能挡住 PTT 松开指令。
-                    threading.Thread(target=client.sync, args=(stack,), daemon=True).start()
+                    threading.Thread(target=client.sync, args=(plan,), daemon=True).start()
                 elif command == 'audio' and client:
                     client.set_mic_volume(data['mic'])
                     client.set_speaker_volume(data['speaker'])
@@ -90,23 +86,6 @@ def main():
                 elif command == 'ptt':
                     if client:
                         (client.start_transmit if data['active'] else client.stop_transmit)()
-                elif command == 'watch':
-                    if watcher:
-                        watcher.stop()
-                    watcher = ptt.PttWatcher(ptt.load(data['bindings']),
-                        on_change=lambda active: emit(event='ptt', active=active))
-                    watcher.start()
-                elif command == 'capture':
-                    if watcher:
-                        watcher.stop()
-                    if capture:
-                        capture.stop()
-                    capture = ptt.PttCapture(lambda binding: emit(event='captured', binding=binding.to_dict()))
-                    capture.start()
-                elif command == 'cancel_capture':
-                    if capture:
-                        capture.stop()
-                        capture = None
                 elif command == 'disconnect':
                     if client:
                         client.disconnect()
@@ -122,10 +101,6 @@ def main():
     finally:
         stop_status.set()
         status_thread.join(timeout=2)
-        if capture:
-            capture.stop()
-        if watcher:
-            watcher.stop()
         if client:
             client.disconnect()
 

@@ -33,7 +33,7 @@ class BridgeTest(unittest.TestCase):
         commands = '\n'.join(json.dumps(item) for item in [
             {'id': 1, 'command': 'devices'},
             {'id': 2, 'command': 'does_not_exist'},
-            {'id': 3, 'command': 'cancel_capture'},
+            {'id': 3, 'command': 'ptt', 'data': {'active': False}},
             {'id': 4, 'command': 'quit'},
         ]) + '\n'
         output, error = process.communicate(commands, timeout=20)
@@ -44,6 +44,18 @@ class BridgeTest(unittest.TestCase):
         self.assertIsInstance(replies[1]['result'], list)
         self.assertIn('error', replies[2])
         self.assertIsNone(replies[3]['result'])
+
+    def test_sync_plan_is_what_csharp_sends(self):
+        from syncplan import SyncPlan
+        plan = SyncPlan.from_dict({'rx': [118000, 121700], 'tx': [118000], 'xc': [],
+                                   'selected': 118000, 'locked': [118000],
+                                   'volumes': {'118000': 80}})
+        self.assertEqual(plan.rx_frequencies(), [118000, 121700])
+        self.assertEqual(plan.tx_frequencies(), [118000])
+        self.assertEqual(plan.selected_khz, 118000)
+        self.assertEqual(plan.locked_khz, {118000})
+        self.assertEqual({r.frequency_khz: r.effective_volume() for r in plan},
+                         {118000: 80, 121700: 100})
 
 
 if __name__ == '__main__':
