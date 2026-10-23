@@ -48,12 +48,19 @@ public sealed class VoiceBridge : IAsyncDisposable
 
     public Task StartAsync()
     {
+        StartProcess();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>确保引擎在跑，并在同一把锁里取出这一次要写的进程，免得并发重启把它换掉。</summary>
+    private Process StartProcess()
+    {
         lock (_lifecycle)
         {
             ObjectDisposedException.ThrowIf(_stopping, this);
             StartCore();
+            return _process!;
         }
-        return Task.CompletedTask;
     }
 
     private void StartCore()
@@ -127,24 +134,30 @@ public sealed class VoiceBridge : IAsyncDisposable
             if (_pending.TryRemove(pair.Key, out var completion)) completion.TrySetException(error);
     }
 
-    public async Task<JsonElement> SendAsync(string command, object? data = null, bool logFailure = true, TimeSpan? timeout = null)
+    /// <param name="boundWrite">
+    /// true（默认）：超时也覆盖写入管道，写不进去就结束引擎——半条 JSON 留在管道里会让之后每条命令都读错。
+    /// false：写入只在关闭时取消，超时只管回执。给可以晚到、但绝不能为它丢掉整条语音连接的命令用
+    /// （距离静音策略）：写不进去说明引擎此刻不读 stdin，这时任何命令都写不进去，等它读就是了。
+    /// </param>
+    public async Task<JsonElement> SendAsync(string command, object? data = null, bool logFailure = true,
+        TimeSpan? timeout = null, bool boundWrite = true)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
         deadline.CancelAfter(timeout ?? TimeSpan.FromSeconds(90));
-        await StartAsync();
-        var process = _process!;
+        var writeToken = boundWrite ? deadline.Token : _shutdown.Token;
+        var process = StartProcess();
         var id = Interlocked.Increment(ref _sequence);
         var completion = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[id] = completion;
         try
         {
-            await _write.WaitAsync(deadline.Token);
+            await _write.WaitAsync(writeToken);
             try
             {
-                deadline.Token.ThrowIfCancellationRequested();
+                writeToken.ThrowIfCancellationRequested();
                 // 写入超时可能留下半条 JSON；结束此进程并等写入退出，再释放写锁。
                 var write = process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { id, command, data }));
-                try { await write.WaitAsync(deadline.Token); }
+                try { await write.WaitAsync(writeToken); }
                 catch
                 {
                     if (!process.HasExited) process.Kill(entireProcessTree: true);

@@ -75,7 +75,7 @@ pwsh -File ./package-release.ps1
 ## 发布与版本号
 
 推到 `main` 就由 [`.github/workflows/release.yml`](.github/workflows/release.yml) 编译、测试、打包并发 Release；
-手动运行该工作流只出产物（挂在 Actions 里），不占版本号。
+手动运行该工作流、或往 `main` 开 PR，只跑测试和打包（产物挂在 Actions 里），不占版本号。
 
 - 版本号 `主.次.补丁`：主次版本写在 `ui/src/ControllerClient/ControllerClient.csproj` 的 `<CanVersion>`（现为 3.0，接在 Python 版 2.x 之后）；
   补丁号由 CI 数已有的 `v3.0.*` 标签取最大加一，这个系列第一次发布是 `v3.0.0`。要发 3.1 就把 `CanVersion` 改成 `3.1.0`。

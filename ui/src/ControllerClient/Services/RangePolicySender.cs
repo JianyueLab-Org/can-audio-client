@@ -67,6 +67,12 @@ public sealed class RangePolicySender(Func<IReadOnlyDictionary<string, bool>, Ta
                 if (Failing) AppLog.Info("距离静音策略已送达语音引擎");
                 Failing = false;
             }
+            catch (Exception ex) when (ex is ObjectDisposedException or OperationCanceledException)
+            {
+                // 程序正在关闭：引擎已经收摊，不是发送失败，不记错误
+                lock (_gate) { _running = false; }
+                return;
+            }
             catch (Exception ex)
             {
                 // 引擎不认这条命令、或者正忙着别的超时了：只记一次，下次刷新会再交一份

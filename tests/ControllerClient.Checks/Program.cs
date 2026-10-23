@@ -280,6 +280,32 @@ Check(RangeAudio.SameAs(tower, new Dictionary<string, bool>(tower)) && !RangeAud
 Check(JsonSerializer.Serialize(tower) == """{"2001":true,"2002":false}""", "发给引擎的是 CID → bool 的 JSON 对象");
 Console.WriteLine("PASS: 距离静音范围规则、坐标解析与快照内容检查");
 
+// —— 快照过期、坐标新旧、暂停原因、只发静音项 ——
+Check(RangeAudio.ToWire(new Dictionary<string, bool> { ["a"] = true, ["b"] = false }) is { Count: 1 } wire && !wire["b"],
+      "发给引擎的只有要静音的 CID：没列出的默认放行，大小只跟静音人数有关");
+var fed = new DateTime(2026, 10, 24, 0, 0, 0);
+Check(!RangeAudio.PolicyExpired(fed, fed.AddSeconds(119)) && RangeAudio.PolicyExpired(fed, fed.AddSeconds(121)),
+      "数据源连续读不到 2 分钟以上，快照过期");
+static NetworkPeer Aged(string json, bool controller) =>
+    NetworkDirectory.ParsePeer(JsonDocument.Parse(json).RootElement, "9", "", controller, 1000);
+Check(Aged("""{"latitude":40,"longitude":116,"position_time":970}""", false).HasPosition, "30 秒前的飞行员坐标可用");
+Check(!Aged("""{"latitude":40,"longitude":116,"position_time":900}""", false).HasPosition, "100 秒前的飞行员坐标当作没有");
+Check(!Aged("""{"latitude":40,"longitude":116,"send_time":999}""", false).HasPosition, "飞行员只认 position_time，send_time 不算");
+Check(Aged("""{"latitude":"40","longitude":"116","send_time":980}""", true).HasPosition
+      && !Aged("""{"latitude":"40","longitude":"116","send_time":800}""", true).HasPosition, "管制员按 send_time 判新旧");
+Check(!Aged("""{"latitude":"40","longitude":"116","send_time":"NaN"}""", true).HasPosition, "时间是 NaN 也当作没有坐标");
+RangeAudio.BuildPolicy("1", [far], out var notListed);
+RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, double.NaN, ZbaaLon), far], out var noPosition);
+RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, ZbaaLon), far], out var judged);
+Check(notListed is not null && noPosition is not null && notListed != noPosition && judged is null,
+      "判断不了时给出原因（不在数据源 / 位置未知），能判断时为 null");
+
+var quietSender = new RangePolicySender(_ => Task.FromException(new ObjectDisposedException("VoiceBridge")));
+quietSender.Submit(new() { ["x"] = false });
+await quietSender.Idle.WaitAsync(TimeSpan.FromSeconds(5));
+Check(!quietSender.Failing, "程序关闭时引擎已收摊，不算发送失败");
+Console.WriteLine("PASS: 快照过期、坐标新旧、暂停原因、只发静音项与关闭时不报错检查");
+
 // 用未完成的回执模拟引擎卡住，验证提交不等待、合并积压和断开清理。
 var rangeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var rangeReply = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -363,6 +389,18 @@ try
     try { await closingBridge.StartAsync(); throw new Exception("关闭后不能重启引擎"); }
     catch (ObjectDisposedException) { }
     Console.WriteLine("PASS: 真实子进程管道背压超时、在途写入关闭、排队 PTT 取消和关闭后禁止重启检查");
+
+    // 距离策略的写入不设超时：引擎暂时不读 stdin 时只能等，绝不能把引擎结束掉
+    var patientBridge = new VoiceBridge();
+    var patient = patientBridge.SendAsync("range_audio", largePolicy, logFailure: false,
+        timeout: TimeSpan.FromMilliseconds(300), boundWrite: false);
+    await Task.Delay(TimeSpan.FromSeconds(1.5));
+    Check(!patient.IsCompleted, "写不进去时距离策略等着，不会因为 300 ms 的回执超时把引擎结束掉");
+    await patientBridge.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+    try { await patient.WaitAsync(TimeSpan.FromSeconds(5)); }
+    catch (Exception ex) when (ex is OperationCanceledException or IOException) { }
+    Check(patient.IsCompleted, "关闭时仍然能结束这条在途写入");
+    Console.WriteLine("PASS: 距离策略写入不受回执超时影响、不结束引擎检查");
 }
 finally
 {
