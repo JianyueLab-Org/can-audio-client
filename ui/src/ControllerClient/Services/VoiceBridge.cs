@@ -107,7 +107,7 @@ public sealed class VoiceBridge : IAsyncDisposable
             if (_pending.TryRemove(pair.Key, out var completion)) completion.TrySetException(error);
     }
 
-    public async Task<JsonElement> SendAsync(string command, object? data = null)
+    public async Task<JsonElement> SendAsync(string command, object? data = null, bool logFailure = true)
     {
         await StartAsync();
         var id = Interlocked.Increment(ref _sequence);
@@ -120,7 +120,7 @@ public sealed class VoiceBridge : IAsyncDisposable
             finally { _write.Release(); }
             return await completion.Task.WaitAsync(TimeSpan.FromSeconds(90));
         }
-        catch (Exception ex) { AppLog.Error($"语音命令失败：{command}", ex); throw; }
+        catch (Exception ex) { if (logFailure) AppLog.Error($"语音命令失败：{command}", ex); throw; }
         finally { _pending.TryRemove(id, out _); }
     }
 

@@ -200,6 +200,52 @@ Check(listenOnly.Tx.Length == 0 && listenOnly.Xc.Length == 0 && listenOnly.Rx.Le
 Check(JsonSerializer.Serialize(plan.Volumes).Contains("\"118000\":100"), "音量表的键是频率字符串，语音引擎按 int 解析");
 Console.WriteLine("PASS: 电台栈联动、值守闸门、主频率选择及同步计划检查");
 
+// —— 距离静音（range_audio 快照） ——
+static NetworkPeer Pilot(string cid, double lat, double lon) => new(cid, "CCA" + cid, false, RangeAudio.Observer, lat, lon);
+static NetworkPeer Atc(string cid, int facility, double lat, double lon) => new(cid, cid + "_ATC", true, facility, lat, lon);
+const double ZbaaLat = 40.07333, ZbaaLon = 116.59833;
+// 正北方向 1 海里 = 1/60 度纬度
+static double North(double nm) => ZbaaLat + nm / 60;
+
+var feed = JsonDocument.Parse("""
+    {"pilots":[{"cid":"1003","callsign":"CCA1658","latitude":40.07724,"longitude":116.61107}],
+     "controllers":[{"cid":"10047","callsign":"ZBAA_TWR","facility":4,"latitude":"40.07333","longitude":"116.59833"},
+                    {"cid":"5158","callsign":"LAX_25_CTR","facility":6,"latitude":"33.9425","longitude":"-118.408074"}]}
+    """).RootElement;
+var feedPeers = feed.GetProperty("pilots").EnumerateArray().Select(e => NetworkDirectory.ParsePeer(e, e.GetProperty("cid").GetString()!, "", false))
+    .Concat(feed.GetProperty("controllers").EnumerateArray().Select(e => NetworkDirectory.ParsePeer(e, e.GetProperty("cid").GetString()!, "", true))).ToList();
+Check(feedPeers.All(p => p.HasPosition) && feedPeers.Single(p => p.Cid == "10047").Facility == RangeAudio.Tower,
+      "数据源里飞行员的数字坐标和管制员的字符串坐标都能读出来");
+var live = RangeAudio.BuildPolicy("10047", feedPeers);
+Check(live.Count == 2 && live["1003"] && live["5158"] && !live.ContainsKey("10047"),
+      "实测数据：本场飞行员放行，万里之外的 LAX CTR 也放行（管制员之间不设限），快照里不含自己");
+
+var d = RangeAudio.DistanceNm(40.08, 116.58, 31.14, 121.80);
+Check(d is > 560 and < 600, $"ZBAA 到 ZSPD 约 580 海里，算出 {d:F0}");
+Check(RangeAudio.RangeNm(false, 0) == 200 && RangeAudio.RangeNm(true, RangeAudio.Delivery) == 100
+      && RangeAudio.RangeNm(true, RangeAudio.Tower) == 100 && RangeAudio.RangeNm(true, RangeAudio.Approach) == 300
+      && RangeAudio.RangeNm(true, RangeAudio.Center) == 600 && RangeAudio.RangeNm(true, RangeAudio.Fss) == 2000,
+      "收听范围：飞行员 200，TWR 及以下 100，APP 300，CTR 600，FSS 2000 海里");
+
+var near = Pilot("2001", North(90), ZbaaLon);
+var far = Pilot("2002", North(150), ZbaaLon);
+var tower = RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, ZbaaLon), near, far]);
+Check(tower["2001"] && !tower["2002"], "TWR：90 海里的飞行员放行，150 海里的静音——同一频率上的两个人可以不同");
+var center = RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Center, ZbaaLat, ZbaaLon), near, far, Pilot("2003", North(700), ZbaaLon)]);
+Check(center["2001"] && center["2002"] && !center["2003"], "CTR：150 海里放行，700 海里静音");
+var both = RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, ZbaaLon), Atc("1", RangeAudio.Approach, ZbaaLat, ZbaaLon), far]);
+Check(both["2002"], "同一 CID 同时开 TWR 和 APP：按范围大的那个席位算");
+var farAtc = RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, ZbaaLon), Atc("3001", RangeAudio.Ground, North(1500), ZbaaLon)]);
+Check(farAtc["3001"], "管制员之间不设限：1500 海里外的 GND 也放行");
+Check(RangeAudio.BuildPolicy("1", [far]).Count == 0, "自己不在数据源里（没坐标）时快照为空，全部默认放行");
+var unknown = RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, ZbaaLon), new NetworkPeer("2004", "CCA2004", false, 0, null, null)]);
+Check(!unknown.ContainsKey("2004"), "没坐标的飞行员不写进快照，交给引擎默认放行，不会被误静音");
+var zero = NetworkDirectory.ParsePeer(JsonDocument.Parse("""{"latitude":0,"longitude":0}""").RootElement, "2005", "", false);
+Check(!zero.HasPosition, "(0, 0) 当作没有坐标");
+Check(RangeAudio.SameAs(tower, new Dictionary<string, bool>(tower)) && !RangeAudio.SameAs(tower, center), "快照比较按键和值");
+Check(JsonSerializer.Serialize(tower) == """{"2001":true,"2002":false}""", "发给引擎的是 CID → bool 的 JSON 对象");
+Console.WriteLine("PASS: 距离静音范围规则、坐标解析与快照内容检查");
+
 // —— 版本号（原 controller/version.py 的规则） ——
 Check(AppVersion.BumpPatch("1.0.9") == "1.0.10" && AppVersion.BumpPatch("1.0") == "1.1", "补丁号按数值进位，不按字符串");
 Check(AppVersion.Format("1.0.3", release: true, "1", null) == "1.0.3"
