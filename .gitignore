@@ -8,10 +8,8 @@ buildinfo.json
 radio_settings.json
 logs/
 *.log
-native/rnnoise/work/
-native/rnnoise/out/
-controller/rnnoise.dll
-controller/RNNOISE-COPYING
+# Python 语音引擎在 JianyueLab-Org/can-audio（new-client-sys），由 sync-voice.ps1 / CI 检出到这里
+can-audio/
 **/bin/
 **/obj/
 ui/.git/

@@ -199,3 +199,12 @@ var listenOnly = MainWindowViewModel.BuildSyncPlan(stations, allowed: false);
 Check(listenOnly.Tx.Length == 0 && listenOnly.Xc.Length == 0 && listenOnly.Rx.Length == 3, "未上席位时计划里没有 TX / XC");
 Check(JsonSerializer.Serialize(plan.Volumes).Contains("\"118000\":100"), "音量表的键是频率字符串，语音引擎按 int 解析");
 Console.WriteLine("PASS: 电台栈联动、值守闸门、主频率选择及同步计划检查");
+
+// —— 版本号（原 controller/version.py 的规则） ——
+Check(AppVersion.BumpPatch("1.0.9") == "1.0.10" && AppVersion.BumpPatch("1.0") == "1.1", "补丁号按数值进位，不按字符串");
+Check(AppVersion.Format("1.0.3", release: true, "1", null) == "1.0.3"
+      && AppVersion.Format("1.0.3", release: true, "1", "71.667d9b4") == "v1.0.3 (build 71.667d9b4)", "正式包报它被打成的标签");
+Check(AppVersion.Format("1.0.3", release: false, "2", null) == "1.0.4 (Dev Build 2)"
+      && AppVersion.Format("1.0.3", release: false, "2", "dev") == "v1.0.4 (Dev Build 2; build dev)", "测试包报下一个补丁号并标出 Dev Build");
+Check(AppVersion.ReleaseVersion.Split('.').Length == 3 && AppVersion.Build.Length > 0, "程序集里带着版本号和 build 号");
+Console.WriteLine($"PASS: 版本号规则（当前 {AppVersion.Full}）");

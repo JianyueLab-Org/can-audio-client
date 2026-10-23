@@ -8,7 +8,7 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        AppLog.Info("客户端启动");
+        AppLog.Info($"客户端启动 {AppVersion.Full}");
         AppDomain.CurrentDomain.UnhandledException += (_, e) => AppLog.Error("未处理异常", e.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, e) => AppLog.Error("未观察的后台任务异常", e.Exception);
         try { BuildAvaloniaApp().StartWithClassicDesktopLifetime(args); }

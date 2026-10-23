@@ -20,7 +20,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
         InitializeBackend();
     }
 
-    public string VersionText => "CAN Audio · 1.0.0";
+    public string VersionText => "CAN Audio · " + AppVersion.Display;
 
     // —— 连接 ——
     [ObservableProperty]

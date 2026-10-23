@@ -10,17 +10,31 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <AssemblyName>ControllerClient</AssemblyName>
     <RootNamespace>ControllerClient</RootNamespace>
-    <Version>1.0.0</Version>
+    <!--
+      版本号：主次版本（1.0）是人的决定，改这里即可，release.yml 从这一行推出要递增的系列；
+      补丁号由 CI 数已有的 v1.0.* 标签取最大加一，经环境变量 CAN_VERSION 传进来。
+      从源码或本地打的包没有 CAN_VERSION，显示成下一个补丁号加 (Dev Build N)，
+      和正式包一眼能分开；正式包永远报它被打成的那个标签。
+    -->
+    <CanVersion>1.0.0</CanVersion>
+    <CanDevBuild>1</CanDevBuild>
+    <CanRelease>false</CanRelease>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CAN_VERSION)' != ''">
+    <CanVersion>$(CAN_VERSION)</CanVersion>
+    <CanRelease>true</CanRelease>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>$(CanVersion)</Version>
+    <InformationalVersion>$(CanVersion)</InformationalVersion>
+    <!-- 默认会把完整提交哈希拼进 ProductVersion；build 号单独放在 CanBuild 里 -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="app.ico" />
-    <Content Include="../../../controller/bridge.py;../../../controller/connectionstatus.py;../../../controller/voice.py;../../../controller/syncplan.py;../../../controller/rxmix.py;../../../controller/denoise.py;../../../controller/micgain.py;../../../controller/mumblecompat.py;../../../controller/i18n.py;../../../controller/*.dll">
-      <Link>controller/%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-    </Content>
     <PackageReference Include="Avalonia" Version="12.1.0" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.0" />
@@ -30,6 +44,39 @@
     <PackageReference Include="Ultz.Native.SDL" Version="2.32.10" />
     <InternalsVisibleTo Include="ControllerClient.Checks" />
   </ItemGroup>
+
+  <!--
+    build 号 = 提交数.短哈希（如 71.667d9b4），工作区有改动再加 +dirty。提交数单调递增，用户说
+    "我这个比他新"时能直接比；短哈希能精确定位提交。打包后程序里没有 git，所以在编译时写进程序集。
+    不是 git 仓库或没装 git 时是 "dev"：显示不出 build 号是小事，为它编译失败是大事。
+  -->
+  <Target Name="CanBuildInfo" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git rev-list --count HEAD" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
+          IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_CanCommitCount" />
+      <Output TaskParameter="ExitCode" PropertyName="_CanCountExit" />
+    </Exec>
+    <Exec Command="git rev-parse --short HEAD" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
+          IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_CanShortHash" />
+      <Output TaskParameter="ExitCode" PropertyName="_CanHashExit" />
+    </Exec>
+    <Exec Command="git status --porcelain" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
+          IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" StandardOutputImportance="low" StandardErrorImportance="low"
+          Condition="'$(_CanCountExit)' == '0' and '$(_CanHashExit)' == '0'">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_CanGitStatus" />
+    </Exec>
+    <PropertyGroup>
+      <CanBuild Condition="'$(_CanCountExit)' == '0' and '$(_CanHashExit)' == '0'">$(_CanCommitCount).$(_CanShortHash)</CanBuild>
+      <CanBuild Condition="'$(CanBuild)' != '' and '$(_CanGitStatus)' != ''">$(CanBuild)+dirty</CanBuild>
+      <CanBuild Condition="'$(CanBuild)' == ''">dev</CanBuild>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="CanBuild" Value="$(CanBuild)" />
+      <AssemblyMetadata Include="CanRelease" Value="$(CanRelease)" />
+      <AssemblyMetadata Include="CanDevBuild" Value="$(CanDevBuild)" />
+    </ItemGroup>
+  </Target>
 
   <Target Name="ExcludeNativeDebugSymbols" AfterTargets="ComputeFilesToPublish" Condition="'$(PublishSingleFile)' == 'true'">
     <ItemGroup>

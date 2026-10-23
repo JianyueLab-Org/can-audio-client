@@ -5,7 +5,12 @@ using System.Text;
 
 namespace ControllerClient.Services;
 
-/// <summary>通过标准输入输出调用现有 Mumble 引擎，凭据不进入命令行。</summary>
+/// <summary>
+/// 通过标准输入输出调用 Python 语音引擎，凭据不进入命令行。
+/// 引擎不在本仓库：发行包里是打包好的 controller/can-voice.exe；从源码跑时用
+/// JianyueLab-Org/can-audio（new-client-sys 分支）的 controller/bridge.py，
+/// 默认找仓库里的 can-audio/（sync-voice.ps1 拉取），或用 CAN_AUDIO_DIR 指向别处的检出。
+/// </summary>
 public sealed class VoiceBridge : IAsyncDisposable
 {
     private Process? _process;
@@ -14,39 +19,52 @@ public sealed class VoiceBridge : IAsyncDisposable
     private int _sequence;
     private bool _stopping;
     public event Action<JsonElement>? Message;
+    /// <summary>发行包目录（含 controller/can-voice.exe），从源码跑时是本仓库根目录。</summary>
     public static string Root { get; } = FindRoot();
-    private static string FindRoot()
+    /// <summary>can-audio 检出目录；没有时为 null。</summary>
+    public static string? VoiceRepo { get; } = FindVoiceRepo();
+
+    private static IEnumerable<DirectoryInfo> Ancestors()
     {
         foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
             for (var dir = new DirectoryInfo(start); dir is not null; dir = dir.Parent)
-                if (File.Exists(Path.Combine(dir.FullName, "controller", "bridge.py")) ||
-                    File.Exists(Path.Combine(dir.FullName, "controller", "can-voice.exe"))) return dir.FullName;
-        return AppContext.BaseDirectory;
+                yield return dir;
+    }
+
+    private static string FindRoot() =>
+        Ancestors().FirstOrDefault(dir => File.Exists(Path.Combine(dir.FullName, "controller", "can-voice.exe")) ||
+                                          File.Exists(Path.Combine(dir.FullName, "can-audio", "controller", "bridge.py")))
+            ?.FullName ?? AppContext.BaseDirectory;
+
+    private static string? FindVoiceRepo()
+    {
+        var configured = Environment.GetEnvironmentVariable("CAN_AUDIO_DIR");
+        if (!string.IsNullOrWhiteSpace(configured)) return Path.GetFullPath(configured);
+        return Ancestors().Select(dir => Path.Combine(dir.FullName, "can-audio"))
+            .FirstOrDefault(path => File.Exists(Path.Combine(path, "controller", "bridge.py")));
     }
 
     public async Task StartAsync()
     {
         if (_process is { HasExited: false }) return;
         var configured = Environment.GetEnvironmentVariable("CAN_PYTHON");
-        var local = Path.Combine(Root, ".venv", "Scripts", "python.exe");
-        if (!File.Exists(local))
-            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            {
-                var candidate = Path.Combine(dir.FullName, ".venv", "Scripts", "python.exe");
-                if (File.Exists(candidate)) { local = candidate; break; }
-            }
         var bundled = Path.Combine(Root, "controller", "can-voice.exe");
         var useBundled = configured is null && File.Exists(bundled);
-        var info = new ProcessStartInfo(useBundled ? bundled : configured ?? (File.Exists(local) ? local : "python"))
+        var bridge = VoiceRepo is null ? null : Path.Combine(VoiceRepo, "controller", "bridge.py");
+        if (!useBundled && (bridge is null || !File.Exists(bridge)))
+            throw new FileNotFoundException("找不到语音引擎：发行包缺少 controller/can-voice.exe；从源码运行请先执行 sync-voice.ps1 拉取 can-audio，或设置 CAN_AUDIO_DIR。");
+        var python = configured ?? new[] { VoiceRepo, Root }.Where(dir => dir is not null)
+            .Select(dir => Path.Combine(dir!, ".venv", "Scripts", "python.exe")).FirstOrDefault(File.Exists) ?? "python";
+        var info = new ProcessStartInfo(useBundled ? bundled : python)
         {
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
-            UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Root
+            UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = useBundled ? Root : Path.GetDirectoryName(bridge)!
         };
         if (!useBundled)
         {
             info.ArgumentList.Add("-u");
-            info.ArgumentList.Add(Path.Combine(Root, "controller", "bridge.py"));
+            info.ArgumentList.Add(bridge!);
         }
         info.Environment["PYTHONIOENCODING"] = "utf-8";
         _stopping = false;

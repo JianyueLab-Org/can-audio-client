@@ -1,4 +1,0 @@
-# C# 客户端的无界面语音引擎，Python 3.12 x64
-pymumble-udp @ git+https://github.com/JianyueLab-Org/pymumble_udp.git@168f2c846d37088902bbfe48f8ea76cb95bf7dd7
-PyAudio
-numpy

@@ -1,19 +1,21 @@
 # CAN Audio Client
 
-CAN 管制语音客户端 **1.0.0 正式版**，使用 C# / .NET 10 / Avalonia 12.1。UI 来自 [can-client-ui](https://github.com/JianyueLab-Org/can-client-ui) 的管制员界面（提交 `ee728d7e775cb692c3d5f6dbf5fd14dd7e9acd0f`）。PTT 全局输入（键盘、鼠标侧键、摇杆）、电台栈规则、席位数据和设置均在 C# 中实现；仅 Mumble 连接与音频收发由无界面的 Python 语音引擎处理，协议见 [controller/README.md](controller/README.md)。
+CAN 管制语音客户端正式版，使用 C# / .NET 10 / Avalonia 12.1。UI 来自 [can-client-ui](https://github.com/JianyueLab-Org/can-client-ui) 的管制员界面（提交 `ee728d7e775cb692c3d5f6dbf5fd14dd7e9acd0f`）。PTT 全局输入（键盘、鼠标侧键、摇杆）、电台栈规则、席位数据和设置均在 C# 中实现；仅 Mumble 连接与音频收发由无界面的 Python 语音引擎处理。
 
-本仓库仅维护 C# 版本和必要的 Python 语音引擎，不包含旧 Python GUI、飞行员或 ATIS 客户端。
+**本仓库只有 C# 代码。** Python 语音引擎只在 [JianyueLab-Org/can-audio](https://github.com/JianyueLab-Org/can-audio/tree/new-client-sys) 的 `new-client-sys` 分支维护（`controller/`，协议见那里的 [controller/README.md](https://github.com/JianyueLab-Org/can-audio/blob/new-client-sys/controller/README.md)）；CI 每次都取该分支的最新提交编进发行包。
 
 ## 下载和运行
 
-在 [Releases](https://github.com/JianyueLab-Org/can-audio-client/releases) 下载 `can-audio-client-1.0.0-win-x64.zip`，解压后运行 `ControllerClient.exe`。需要 Windows x64；发行包自带 .NET 运行时和打包语音引擎，**无需安装 .NET 或 Python**。
+在 [Releases](https://github.com/JianyueLab-Org/can-audio-client/releases) 下载最新的 `can-audio-client-<版本>-win-x64.zip`，解压后运行 `ControllerClient.exe`。需要 Windows x64；发行包自带 .NET 运行时和打包语音引擎，**无需安装 .NET 或 Python**。
 
 ```text
-can-audio-client-1.0.0-win-x64/
+can-audio-client-<版本>-win-x64/
   ControllerClient.exe
   controller/
-    can-voice.exe
+    can-voice.exe          语音引擎
+    voice-engine.txt       语音引擎来自 can-audio 的哪个提交
   README.md
+  RNNOISE-COPYING          降噪库许可
 ```
 
 保留整个目录，不要单独复制 EXE。
@@ -37,43 +39,52 @@ can-audio-client-1.0.0-win-x64/
 
 ## 从源码运行
 
-需要 .NET 10 SDK、Python 3.12 x64、Git：
+需要 .NET 10 SDK、PowerShell 7、Python 3.12 x64、Git。先把语音引擎拉到本仓库的 `can-audio/`（已 gitignore），
+`-Venv` 顺便在 `can-audio/.venv` 建好 Python 环境：
 
 ```powershell
-py -3.12 -m venv .venv
-$env:PYTHONUTF8 = 1
-.\.venv\Scripts\python.exe -m pip install -r requirements-voice.txt
+pwsh -File ./sync-voice.ps1 -Venv
 dotnet build CanAudio.slnx
 pwsh -File ./run-csharp.ps1
 ```
 
-默认使用本项目 `.venv/Scripts/python.exe`；设置 `CAN_PYTHON` 可指定其他 Python。发行包默认优先使用 `controller/can-voice.exe`。语音引擎不依赖 Qt、pynput 或 pygame；摇杆通过 C# 直接调用随包的 SDL2，设备和按钮序号与旧版一致。
+以后再跑 `sync-voice.ps1` 即可更新到 `new-client-sys` 的最新提交。也可以用环境变量 `CAN_AUDIO_DIR` 指向别处的
+can-audio 检出、`CAN_PYTHON` 指定解释器。发行包则直接用 `controller/can-voice.exe`。语音引擎不依赖 Qt、pynput
+或 pygame；摇杆通过 C# 直接调用随包的 SDL2，设备和按钮序号与旧版一致。
 
 ## 验证与编译
 
 ```powershell
 dotnet run --project tests/ControllerClient.Checks -c Release
-.\.venv\Scripts\python.exe -m unittest discover -s controller -v
+can-audio\.venv\Scripts\python.exe -m unittest discover -s can-audio/controller -v
 ```
 
-仅编译 C# 单文件程序（仍需本地 Python 环境）：
+仅编译 C# 单文件程序：`pwsh -File ./build.ps1`，输出 `dist/CanAudio-singlefile/`。使用 .NET 10 自包含单文件发布、
+压缩、原生库自解压，托管 DLL 合并到 EXE；不裁剪反射所需类型。
+
+本地生成完整便携包（PyInstaller 把 `can-audio/controller` 打成 `can-voice.exe`，并验包）：
 
 ```powershell
-pwsh -File ./build.ps1
-```
-
-输出 `dist/CanAudio-singlefile/`。使用 .NET 10 自包含单文件发布、压缩、原生库自解压，托管 DLL 合并到 EXE；不裁剪反射所需类型。
-
-生成完整便携发行包（含 PyInstaller 打包的单文件语音引擎）：
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
 pwsh -File ./package-release.ps1
 ```
 
-输出 `dist/can-audio-client-1.0.0-win-x64.zip` 和 SHA-256 校验文件。
+输出 `dist/can-audio-client-<版本>-dev-win-x64.zip`。本地包显示成「下一个补丁号 (Dev Build N)」，与正式包区分。
+可选降噪库：用 CMake 和 Visual Studio C++ x64 工具执行 `pwsh -File can-audio/native/rnnoise/build.ps1 -Out can-audio/controller`，
+存在 `rnnoise.dll` 时会一并打进语音引擎；缺少时语音正常收发，降噪不可用。
 
-可选降噪库：使用 CMake 和 Visual Studio C++ x64 工具执行 `pwsh -File native/rnnoise/build.ps1 -Out controller`；存在 `rnnoise.dll` 时发行脚本会自动包含。缺少该库时语音正常收发，降噪不可用。
+## 发布与版本号
+
+推到 `main` 就由 [`.github/workflows/release.yml`](.github/workflows/release.yml) 编译、测试、打包并发 Release；
+手动运行该工作流只出产物（挂在 Actions 里），不占版本号。
+
+- 版本号 `主.次.补丁`：主次版本写在 `ui/src/ControllerClient/ControllerClient.csproj` 的 `<CanVersion>`（现为 1.0）；
+  补丁号由 CI 数已有的 `v1.0.*` 标签取最大加一，第一次发布是 `v1.0.0`。要发 1.1 就把 `CanVersion` 改成 `1.1.0`。
+- 程序标题栏显示版本号，日志写完整版本与 build 号（`提交数.短哈希`）。正式包报它被打成的标签；本地或从源码编译的显示
+  下一个补丁号加 `(Dev Build N)`。
+- 每次都取 can-audio `new-client-sys` 的最新提交打包，用到的提交号写在 Release 说明和包里的 `controller/voice-engine.txt`。
+  can-audio 有更新而本仓库没有改动时，在 Actions 里手动运行可以先试包；要发版需要往 `main` 推一个提交。
+- 发布前会跑 can-audio `controller/` 的单元测试和本仓库的 C# 检查，并验包：exe 版本号、语音引擎带齐 `opus.dll` /
+  `rnnoise.dll`、冻结后的语音引擎能回协议。任何一步失败都不打标签、不发 Release。
 
 ## 功能范围
 
@@ -83,4 +94,5 @@ pwsh -File ./package-release.ps1
 
 ## 来源
 
-Python 语音引擎提取自 `JianyueLab-Org/can-audio` 的 `controller/`（源提交 `e724bff58ddad12eb965aba79817b4b58b30b489`）。仅保留 C# 客户端所需模块、Opus 库、相关测试和可选 RNNoise 构建支持。
+Python 语音引擎最初提取自 `JianyueLab-Org/can-audio` 的 `controller/`（源提交 `e724bff58ddad12eb965aba79817b4b58b30b489`），
+现在只在 can-audio 的 `new-client-sys` 分支维护。
