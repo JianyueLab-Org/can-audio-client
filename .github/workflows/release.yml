@@ -48,7 +48,7 @@ jobs:
       tag: ${{ steps.next.outputs.tag }}             # v1.0.7
       voice_sha: ${{ steps.voice.outputs.sha }}      # can-audio new-client-sys 的提交
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0        # 要看到全部标签
       - id: next
@@ -82,12 +82,12 @@ jobs:
     needs: version
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.VOICE_REPO }}
           ref: ${{ needs.version.outputs.voice_sha }}
           path: can-audio
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: cache
         with:
           path: can-audio/native/rnnoise/out
@@ -95,7 +95,7 @@ jobs:
       - name: 构建 rnnoise.dll
         if: steps.cache.outputs.cache-hit != 'true'
         run: ./can-audio/native/rnnoise/build.ps1 -Out can-audio/native/rnnoise/out
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rnnoise-dll
           path: can-audio/native/rnnoise/out/
@@ -106,24 +106,24 @@ jobs:
     needs: [version, rnnoise]
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.VOICE_REPO }}
           ref: ${{ needs.version.outputs.voice_sha }}
           path: can-audio
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'   # PyAudio 没有 3.13+ 的 wheel
           cache: pip
           cache-dependency-path: can-audio/requirements-*.txt
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - run: |
           python -m pip install --upgrade pip
           pip install -r can-audio/requirements-build.txt
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: rnnoise-dll
           path: can-audio/controller
@@ -145,27 +145,27 @@ jobs:
     needs: [version, rnnoise]
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # build 号用 git rev-list --count HEAD，浅克隆只有一个提交，会得出 build 1
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.VOICE_REPO }}
           ref: ${{ needs.version.outputs.voice_sha }}
           path: can-audio
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: can-audio/requirements-*.txt
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - run: |
           python -m pip install --upgrade pip
           pip install -r can-audio/requirements-build.txt
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: rnnoise-dll
           path: can-audio/controller
@@ -178,7 +178,7 @@ jobs:
         # 冻结后的语音引擎能不能真的回协议
         run: ./package-release.ps1 -Python python
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: can-audio-client
           path: dist/can-audio-client-*.zip
@@ -190,11 +190,11 @@ jobs:
     needs: [version, test, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: can-audio-client
           path: packages
@@ -217,7 +217,7 @@ jobs:
           git push origin "${{ needs.version.outputs.tag }}"
 
       - name: 建 Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.version.outputs.tag }}
           name: ${{ needs.version.outputs.tag }}
