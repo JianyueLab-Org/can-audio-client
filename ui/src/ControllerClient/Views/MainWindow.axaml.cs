@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using ControllerClient.ViewModels;
 
 namespace ControllerClient.Views;
@@ -16,6 +17,21 @@ public partial class MainWindow : Window
     }
 
     private MainWindowViewModel Vm => (MainWindowViewModel)DataContext!;
+
+    /// <summary>
+    /// 窗口不可缩放，大小只能跟着内容走；SizeToContent 一旦被关掉就立刻改回来。
+    /// Avalonia 的 Window.HandleResized 判断"用户缩放"时少了括号：
+    /// <c>... &amp;&amp; CanResize &amp;&amp; reason == Unspecified || reason == User</c>，
+    /// 所以只要 Win32 把某次 WM_SIZE 记成 User（WM_ENTERSIZEMOVE 到 WM_EXITSIZEMOVE 之间，
+    /// 拖动顶部移动窗口就会进这段），CanResize="False" 也挡不住它把 SizeToContent 改成 Manual。
+    /// 之后连接、展开都不再撑大窗口，只剩左上角未连接时那一小块，其余内容被裁掉。
+    /// </summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == SizeToContentProperty && SizeToContent != SizeToContent.WidthAndHeight)
+            Dispatcher.UIThread.Post(() => SizeToContent = SizeToContent.WidthAndHeight);
+    }
 
     /// <summary>
     /// 在窗口内的遮罩层上显示模态对话框，返回用户点击的按钮。
