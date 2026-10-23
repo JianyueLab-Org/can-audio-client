@@ -77,8 +77,8 @@ pwsh -File ./package-release.ps1
 推到 `main` 就由 [`.github/workflows/release.yml`](.github/workflows/release.yml) 编译、测试、打包并发 Release；
 手动运行该工作流只出产物（挂在 Actions 里），不占版本号。
 
-- 版本号 `主.次.补丁`：主次版本写在 `ui/src/ControllerClient/ControllerClient.csproj` 的 `<CanVersion>`（现为 1.0）；
-  补丁号由 CI 数已有的 `v1.0.*` 标签取最大加一，第一次发布是 `v1.0.0`。要发 1.1 就把 `CanVersion` 改成 `1.1.0`。
+- 版本号 `主.次.补丁`：主次版本写在 `ui/src/ControllerClient/ControllerClient.csproj` 的 `<CanVersion>`（现为 3.0，接在 Python 版 2.x 之后）；
+  补丁号由 CI 数已有的 `v3.0.*` 标签取最大加一，这个系列第一次发布是 `v3.0.0`。要发 3.1 就把 `CanVersion` 改成 `3.1.0`。
 - 程序标题栏显示版本号，日志写完整版本与 build 号（`提交数.短哈希`）。正式包报它被打成的标签；本地或从源码编译的显示
   下一个补丁号加 `(Dev Build N)`。
 - 每次都取 can-audio `new-client-sys` 的最新提交打包，用到的提交号写在 Release 说明和包里的 `controller/voice-engine.txt`。

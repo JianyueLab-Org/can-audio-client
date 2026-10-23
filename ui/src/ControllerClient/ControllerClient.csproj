@@ -11,12 +11,12 @@
     <AssemblyName>ControllerClient</AssemblyName>
     <RootNamespace>ControllerClient</RootNamespace>
     <!--
-      版本号：主次版本（1.0）是人的决定，改这里即可，release.yml 从这一行推出要递增的系列；
-      补丁号由 CI 数已有的 v1.0.* 标签取最大加一，经环境变量 CAN_VERSION 传进来。
+      版本号：主次版本（3.0）是人的决定，改这里即可，release.yml 从这一行推出要递增的系列；
+      补丁号由 CI 数已有的 v3.0.* 标签取最大加一，经环境变量 CAN_VERSION 传进来。
       从源码或本地打的包没有 CAN_VERSION，显示成下一个补丁号加 (Dev Build N)，
       和正式包一眼能分开；正式包永远报它被打成的那个标签。
     -->
-    <CanVersion>1.0.0</CanVersion>
+    <CanVersion>3.0.0</CanVersion>
     <CanDevBuild>1</CanDevBuild>
     <CanRelease>false</CanRelease>
   </PropertyGroup>
