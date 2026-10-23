@@ -3,6 +3,14 @@ using ControllerClient.ViewModels;
 using ControllerClient.Services;
 using ControllerClient.Services.Ptt;
 
+// 作为 VoiceBridge 的替身子进程运行，模拟不读取 stdin 的引擎。
+if (args is ["-u", var fakeScript] && File.Exists(fakeScript)
+    && File.ReadAllText(fakeScript) == "ControllerClient.Checks stalled engine")
+{
+    await Task.Delay(TimeSpan.FromSeconds(30));
+    return;
+}
+
 static void Check(bool condition, string message)
 {
     if (!condition) throw new Exception(message);
@@ -61,6 +69,12 @@ Check(status.VoiceText == "语音：重连中", "掉线应清除旧传输和延�
 status.SetVoiceState("error");
 status.UpdateVoice(Binding(new { connected = false, running = false, transport = (string?)null, latency_ms = (double?)null }));
 Check(status.VoiceText == "语音：连接错误", "空快照不能抹去连接错误");
+Check(ConnectionStatusViewModel.IsTerminalVoiceState("offline")
+      && ConnectionStatusViewModel.IsTerminalVoiceState("error")
+      && ConnectionStatusViewModel.IsTerminalVoiceState("stopped")
+      && !ConnectionStatusViewModel.IsTerminalVoiceState("reconnecting")
+      && !ConnectionStatusViewModel.IsTerminalVoiceState("online"),
+      "重连耗尽的 offline 必须清理会话和距离策略，临时重连仍保留会话");
 status.UpdateFsd(true, new DateTime(2026, 10, 23, 12, 34, 56), 50);
 Check(status.FsdText.Contains("已连接（数据源确认）") && status.FeedText.Contains("12:34:56"), "FSD 状态应注明数据源及更新时间");
 status.FeedFailed();
@@ -253,6 +267,9 @@ foreach (var invalid in new[] { "NaN", "Infinity", "-Infinity", "1e999" })
 }
 Check(!Pilot("2006", double.NaN, ZbaaLon).HasPosition, "直接构造的非有限坐标也不能参与距离计算");
 var unlocatedAtc = new NetworkPeer("1", "ZBAA_TWR", true, RangeAudio.Tower, null, null);
+Check(RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, ZbaaLon),
+      unlocatedAtc with { Callsign = "ZBAA_APP", Facility = RangeAudio.Approach }, far]).Count == 0,
+      "部分本人管制席位缺坐标时不能仅按已知席位拒绝，未知席位默认放行");
 Check(RangeAudio.BuildPolicy("1", [unlocatedAtc, Pilot("1", ZbaaLat, ZbaaLon), far,
       Atc("3001", RangeAudio.Center, 33.94, -118.4)]).Count == 0,
       "本人管制员缺坐标时默认放行，不能退回飞行员身份静音远处管制员");
@@ -316,6 +333,43 @@ retrySender.Submit(new() { ["next"] = true });
 await retrySender.Idle.WaitAsync(TimeSpan.FromSeconds(5));
 Check(retryCount == 2 && !retrySender.Failing, "下一次刷新可重试并恢复失败状态");
 Console.WriteLine("PASS: 距离策略非阻塞发送、最新快照合并、重连重发、断开清理及超时恢复检查");
+
+var fakeRepo = Path.Combine(Path.GetTempPath(), "can-bridge-checks-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(Path.Combine(fakeRepo, "controller"));
+File.WriteAllText(Path.Combine(fakeRepo, "controller", "bridge.py"), "ControllerClient.Checks stalled engine");
+var oldAudioDir = Environment.GetEnvironmentVariable("CAN_AUDIO_DIR");
+var oldPython = Environment.GetEnvironmentVariable("CAN_PYTHON");
+Environment.SetEnvironmentVariable("CAN_AUDIO_DIR", fakeRepo);
+Environment.SetEnvironmentVariable("CAN_PYTHON", Environment.ProcessPath!);
+try
+{
+    var largePolicy = Enumerable.Range(1, 10000).ToDictionary(i => i.ToString(), _ => false);
+    var blockedBridge = new VoiceBridge();
+    var blocked = blockedBridge.SendAsync("range_audio", largePolicy, logFailure: false, timeout: TimeSpan.FromMilliseconds(300));
+    try { await blocked.WaitAsync(TimeSpan.FromSeconds(5)); throw new Exception("管道背压必须超时"); }
+    catch (TimeoutException) { Check(blocked.IsCompleted, "超时必须覆盖管道写入，而不是只覆盖回执"); }
+    await blockedBridge.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+
+    var closingBridge = new VoiceBridge();
+    var writing = closingBridge.SendAsync("range_audio", largePolicy, logFailure: false);
+    var queuedPtt = closingBridge.SendAsync("ptt", new { active = false }, logFailure: false);
+    await closingBridge.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+    foreach (var task in new[] { writing, queuedPtt })
+    {
+        try { await task.WaitAsync(TimeSpan.FromSeconds(5)); }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException) { }
+        Check(task.IsCompleted, "关闭必须结束正在写入和等待写锁的命令");
+    }
+    try { await closingBridge.StartAsync(); throw new Exception("关闭后不能重启引擎"); }
+    catch (ObjectDisposedException) { }
+    Console.WriteLine("PASS: 真实子进程管道背压超时、在途写入关闭、排队 PTT 取消和关闭后禁止重启检查");
+}
+finally
+{
+    Environment.SetEnvironmentVariable("CAN_AUDIO_DIR", oldAudioDir);
+    Environment.SetEnvironmentVariable("CAN_PYTHON", oldPython);
+    Directory.Delete(fakeRepo, recursive: true);
+}
 
 // —— 版本号（原 controller/version.py 的规则） ——
 Check(AppVersion.BumpPatch("1.0.9") == "1.0.10" && AppVersion.BumpPatch("1.0") == "1.1", "补丁号按数值进位，不按字符串");

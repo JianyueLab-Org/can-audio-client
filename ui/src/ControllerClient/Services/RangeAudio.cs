@@ -58,6 +58,8 @@ public static class RangeAudio
         // 只要有管制记录就按管制员收听，哪怕那条记录没坐标——不能因为管制席位缺坐标就退回
         // 飞行员的 200 海里。管制席位都没坐标就判断不了，整张快照为空、全部放行。
         var listenerIsController = mine.Any(p => p.IsController);
+        // 任一适用席位位置未知，就无法确定所有席位都在范围外。
+        if (mine.Any(p => p.IsController == listenerIsController && !p.HasPosition)) return policy;
         var listeners = mine.Where(p => p.IsController == listenerIsController && p.HasPosition).ToList();
         if (listeners.Count == 0) return policy;
 

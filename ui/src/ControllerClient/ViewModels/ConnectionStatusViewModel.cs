@@ -6,6 +6,9 @@ namespace ControllerClient.ViewModels;
 /// <summary>与 MSFS 客户端一致：连接状态 + 当前音频传输 + 实测平均 RTT。</summary>
 public sealed partial class ConnectionStatusViewModel : ViewModelBase
 {
+    /// <summary>offline 是引擎重连耗尽后的终态，需要清理整个会话。</summary>
+    internal static bool IsTerminalVoiceState(string state) => state is "error" or "stopped" or "offline";
+
     [ObservableProperty] private string _fsdText = "FSD：未检查（数据源）";
     [ObservableProperty] private string _voiceText = "语音：未连接";
     [ObservableProperty] private string _feedText = "席位数据：未更新";

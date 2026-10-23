@@ -326,7 +326,7 @@ public sealed partial class MainWindowViewModel
                 AppLog.Info($"语音状态 {state}：{StatusText}");
                 // 重连后再推一次：引擎会保留快照，但协议要求 online 后重发，防止中途丢了
                 if (state == "online" && IsConnected) _range.Resend();
-                if (kind.GetString() == "fatal" || msg.GetProperty("state").GetString() is "error" or "stopped")
+                if (ConnectionStatusViewModel.IsTerminalVoiceState(state))
                 {
                     _range.Clear();
                     IsConnected = false; IsTransmitting = false; IsReceiving = false;
