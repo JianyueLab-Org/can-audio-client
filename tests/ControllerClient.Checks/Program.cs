@@ -242,9 +242,80 @@ var unknown = RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, Z
 Check(!unknown.ContainsKey("2004"), "没坐标的飞行员不写进快照，交给引擎默认放行，不会被误静音");
 var zero = NetworkDirectory.ParsePeer(JsonDocument.Parse("""{"latitude":0,"longitude":0}""").RootElement, "2005", "", false);
 Check(!zero.HasPosition, "(0, 0) 当作没有坐标");
+foreach (var invalid in new[] { "NaN", "Infinity", "-Infinity", "1e999" })
+{
+    using var invalidDoc = JsonDocument.Parse(JsonSerializer.Serialize(new { latitude = invalid, longitude = "116.6" }));
+    var invalidPeer = NetworkDirectory.ParsePeer(invalidDoc.RootElement, "2006", "", false);
+    Check(!invalidPeer.HasPosition, $"非有限坐标 {invalid} 当作没有坐标");
+    Check(!RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, ZbaaLon), invalidPeer]).ContainsKey("2006"),
+          "非法坐标的飞行员默认放行");
+    Check(RangeAudio.BuildPolicy("2006", [invalidPeer, near]).Count == 0, "本人坐标非法时不误静音其他人");
+}
+Check(!Pilot("2006", double.NaN, ZbaaLon).HasPosition, "直接构造的非有限坐标也不能参与距离计算");
+var unlocatedAtc = new NetworkPeer("1", "ZBAA_TWR", true, RangeAudio.Tower, null, null);
+Check(RangeAudio.BuildPolicy("1", [unlocatedAtc, Pilot("1", ZbaaLat, ZbaaLon), far,
+      Atc("3001", RangeAudio.Center, 33.94, -118.4)]).Count == 0,
+      "本人管制员缺坐标时默认放行，不能退回飞行员身份静音远处管制员");
+var mixedIdentity = RangeAudio.BuildPolicy("1", [Atc("1", RangeAudio.Tower, ZbaaLat, ZbaaLon),
+    Pilot("1", North(150), ZbaaLon), far]);
+Check(!mixedIdentity["2002"], "本人有管制员坐标时不借用飞行员位置扩大收听范围");
 Check(RangeAudio.SameAs(tower, new Dictionary<string, bool>(tower)) && !RangeAudio.SameAs(tower, center), "快照比较按键和值");
 Check(JsonSerializer.Serialize(tower) == """{"2001":true,"2002":false}""", "发给引擎的是 CID → bool 的 JSON 对象");
 Console.WriteLine("PASS: 距离静音范围规则、坐标解析与快照内容检查");
+
+// 用未完成的回执模拟引擎卡住，验证提交不等待、合并积压和断开清理。
+var rangeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+var rangeReply = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+var rangeSent = new List<Dictionary<string, bool>>();
+var rangeSender = new RangePolicySender(async policy =>
+{
+    rangeSent.Add(new(policy));
+    if (rangeSent.Count == 1)
+    {
+        rangeStarted.SetResult();
+        await rangeReply.Task;
+    }
+});
+rangeSender.Submit(new() { ["first"] = true });
+await rangeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+Check(!rangeSender.Idle.IsCompleted, "回执未到时发送仍在进行，但 Submit 已返回");
+rangeSender.Submit(new() { ["intermediate"] = true });
+rangeSender.Submit(new() { ["latest"] = false });
+rangeReply.SetResult();
+await rangeSender.Idle.WaitAsync(TimeSpan.FromSeconds(5));
+Check(rangeSent.Count == 2 && rangeSent[1].ContainsKey("latest"), "引擎恢复后只补发最新快照");
+rangeSender.Resend();
+await rangeSender.Idle.WaitAsync(TimeSpan.FromSeconds(5));
+Check(rangeSent.Count == 3 && rangeSent[2].ContainsKey("latest"), "重连重发最新快照");
+
+var clearStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+var clearReply = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+var clearSendCount = 0;
+var clearSender = new RangePolicySender(async _ =>
+{
+    clearSendCount++;
+    clearStarted.TrySetResult();
+    await clearReply.Task;
+});
+clearSender.Submit(new() { ["first"] = true });
+await clearStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+clearSender.Submit(new() { ["pending"] = false });
+clearSender.Clear();
+clearReply.SetResult();
+await clearSender.Idle.WaitAsync(TimeSpan.FromSeconds(5));
+clearSender.Resend();
+Check(clearSendCount == 1 && clearSender.Latest is null, "断开丢弃积压快照，重连前不再重发");
+
+var retryCount = 0;
+var retrySender = new RangePolicySender(_ => ++retryCount == 1
+    ? Task.FromException(new TimeoutException("模拟引擎回执超时")) : Task.CompletedTask);
+retrySender.Submit(new() { ["first"] = true });
+await retrySender.Idle.WaitAsync(TimeSpan.FromSeconds(5));
+Check(retrySender.Failing, "发送超时记录失败但不会卡住发送器");
+retrySender.Submit(new() { ["next"] = true });
+await retrySender.Idle.WaitAsync(TimeSpan.FromSeconds(5));
+Check(retryCount == 2 && !retrySender.Failing, "下一次刷新可重试并恢复失败状态");
+Console.WriteLine("PASS: 距离策略非阻塞发送、最新快照合并、重连重发、断开清理及超时恢复检查");
 
 // —— 版本号（原 controller/version.py 的规则） ——
 Check(AppVersion.BumpPatch("1.0.9") == "1.0.10" && AppVersion.BumpPatch("1.0") == "1.1", "补丁号按数值进位，不按字符串");

@@ -69,7 +69,8 @@ public sealed class NetworkDirectory : IDisposable
         }
         var lat = Number(entry, "latitude");
         var lon = Number(entry, "longitude");
-        if (lat is null || lon is null || Math.Abs(lat.Value) > 90 || Math.Abs(lon.Value) > 180 || (lat == 0 && lon == 0))
+        if (lat is not { } a || lon is not { } b || !double.IsFinite(a) || !double.IsFinite(b)
+            || Math.Abs(a) > 90 || Math.Abs(b) > 180 || (a == 0 && b == 0))
             lat = lon = null;
         var facility = (int)(Number(entry, "facility") ?? RangeAudio.Observer);
         return new(cid, callsign, isController, facility, lat, lon);

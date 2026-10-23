@@ -3,7 +3,10 @@ namespace ControllerClient.Services;
 /// <summary>数据源里一个在线的飞行员或管制席位，以及它的坐标（没有坐标时为 null）。</summary>
 public sealed record NetworkPeer(string Cid, string Callsign, bool IsController, int Facility, double? Latitude, double? Longitude)
 {
-    public bool HasPosition => Latitude is not null && Longitude is not null;
+    /// <summary>有限且在合法范围内才算有坐标。"NaN" 能被 double.TryParse 读出来，算出的距离也是 NaN，
+    /// 任何比较都是 false——不挡在这里，这个人就会被当成"超出范围"静音。</summary>
+    public bool HasPosition => Latitude is { } lat && Longitude is { } lon
+        && double.IsFinite(lat) && double.IsFinite(lon) && Math.Abs(lat) <= 90 && Math.Abs(lon) <= 180;
 }
 
 /// <summary>
@@ -52,11 +55,11 @@ public static class RangeAudio
         var policy = new Dictionary<string, bool>();
         var byCid = peers.Where(p => p.Cid.Length > 0).GroupBy(p => p.Cid).ToDictionary(g => g.Key, g => g.ToList());
         if (!byCid.TryGetValue(myCid, out var mine)) return policy;
-        // 管制员客户端以管制席位收听；只有飞行员身份时才按飞行员算
-        var listeners = mine.Where(p => p.HasPosition && p.IsController).ToList();
-        if (listeners.Count == 0) listeners = mine.Where(p => p.HasPosition).ToList();
+        // 只要有管制记录就按管制员收听，哪怕那条记录没坐标——不能因为管制席位缺坐标就退回
+        // 飞行员的 200 海里。管制席位都没坐标就判断不了，整张快照为空、全部放行。
+        var listenerIsController = mine.Any(p => p.IsController);
+        var listeners = mine.Where(p => p.IsController == listenerIsController && p.HasPosition).ToList();
         if (listeners.Count == 0) return policy;
-        var listenerIsController = listeners[0].IsController;
 
         foreach (var (cid, entries) in byCid)
         {

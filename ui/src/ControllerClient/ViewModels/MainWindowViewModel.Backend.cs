@@ -24,8 +24,7 @@ public sealed partial class MainWindowViewModel
     private bool _allowed;
     private bool _settingsOpen;
     private string _sessionCid = "";
-    private Dictionary<string, bool>? _rangePolicy;  // 最近一次推给引擎的距离静音快照
-    private bool _rangeFailing;
+    private RangePolicySender _range = null!;      // 距离静音快照，不等回执
     public SettingsViewModel Settings { get; private set; } = new();
     public ConnectionStatusViewModel ConnectionStatus { get; } = new();
     public ObservableCollection<Position> OnlinePositions { get; } = [];
@@ -38,6 +37,8 @@ public sealed partial class MainWindowViewModel
         _ptt = new PttWatcher([], active => Dispatcher.UIThread.Post(() => OnPtt(active), DispatcherPriority.Send));
         ConfigureSettings(Settings);
         _bridge.Message += msg => Dispatcher.UIThread.Post(() => HandleMessage(msg));
+        _range = new RangePolicySender(policy =>
+            _bridge.SendAsync("range_audio", policy, logFailure: false, timeout: TimeSpan.FromSeconds(10)));
         _feedTimer.Tick += async (_, _) => await RefreshFeedAsync();
         _feedTimer.Start();
         _syncTimer.Tick += async (_, _) => { _syncTimer.Stop(); await SyncAsync(); };
@@ -159,7 +160,7 @@ public sealed partial class MainWindowViewModel
             {
                 ApplyDuty(_directory.Positions.Where(p => p.Cid == _sessionCid).ToList());
                 // 每次刷新都推完整快照：变了就立即生效，没变也顺带重发一次，覆盖引擎重连或丢命令
-                await SendRangePolicyAsync(RangeAudio.BuildPolicy(_sessionCid, _directory.Peers));
+                SubmitRangePolicy(RangeAudio.BuildPolicy(_sessionCid, _directory.Peers));
             }
         }
         catch (Exception ex)
@@ -173,30 +174,20 @@ public sealed partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// 距离静音：把 CID → allow 完整快照交给语音引擎（range_audio）。数据源读取失败时不调这里，
-    /// 引擎里保留上一份。旧版引擎不认这条命令，失败只记一次日志，下次刷新再试。
+    /// 距离静音：把 CID → allow 完整快照交给语音引擎（range_audio）。只交出去、不等回执，
+    /// 见 <see cref="RangePolicySender"/>。数据源读取失败时不调这里，引擎里保留上一份。
     /// </summary>
-    private async Task SendRangePolicyAsync(Dictionary<string, bool> policy)
+    private void SubmitRangePolicy(Dictionary<string, bool> policy)
     {
-        if (_rangePolicy is null || !RangeAudio.SameAs(_rangePolicy, policy))
+        var previous = _range.Latest;
+        if (previous is null || !RangeAudio.SameAs(previous, policy))
         {
             var muted = policy.Where(p => !p.Value).Select(p => _directory.Roster.GetValueOrDefault(p.Key, p.Key)).Order().ToList();
-            var before = _rangePolicy?.Count(p => !p.Value) ?? 0;
+            var before = previous?.Count(p => !p.Value) ?? 0;
             if (muted.Count > 0 || before > 0)
                 AppLog.Info(muted.Count == 0 ? "距离静音：没有超出收听范围的人" : $"距离静音：{muted.Count} 人超出收听范围（{string.Join(", ", muted)}）");
         }
-        _rangePolicy = policy;
-        try
-        {
-            await _bridge.SendAsync("range_audio", policy, logFailure: false);
-            if (_rangeFailing) AppLog.Info("距离静音策略已送达语音引擎");
-            _rangeFailing = false;
-        }
-        catch (Exception ex)
-        {
-            if (!_rangeFailing) AppLog.Error("距离静音策略发送失败，下次刷新时重试", ex);
-            _rangeFailing = true;
-        }
+        _range.Submit(policy);
     }
 
     private void ApplyDuty(List<Position> own)
@@ -334,10 +325,10 @@ public sealed partial class MainWindowViewModel
                 ConnectionStatus.SetVoiceState(state);
                 AppLog.Info($"语音状态 {state}：{StatusText}");
                 // 重连后再推一次：引擎会保留快照，但协议要求 online 后重发，防止中途丢了
-                if (state == "online" && IsConnected && _rangePolicy is { } policy) _ = SendRangePolicyAsync(policy);
+                if (state == "online" && IsConnected) _range.Resend();
                 if (kind.GetString() == "fatal" || msg.GetProperty("state").GetString() is "error" or "stopped")
                 {
-                    _rangePolicy = null;
+                    _range.Clear();
                     IsConnected = false; IsTransmitting = false; IsReceiving = false;
                     Stations.Clear(); _syncTimer.Stop();
                 }
@@ -357,6 +348,7 @@ public sealed partial class MainWindowViewModel
 
     public async ValueTask DisposeAsync()
     {
+        _range.Clear();
         _feedTimer.Stop(); _syncTimer.Stop(); _directory.Dispose();
         StopPttCapture();
         _ptt.Dispose();
