@@ -24,6 +24,9 @@ public sealed partial class MainWindowViewModel
     private bool _allowed;
     private bool _settingsOpen;
     private string _sessionCid = "";
+    private RangePolicySender _range = null!;      // 距离静音快照，不等回执
+    private DateTime _lastFeedAt = DateTime.Now;      // 上一次数据源读成功的时间，判断快照是否过期
+    private string? _rangeUnavailable;                // 距离静音暂停的原因，变化时写日志
     public SettingsViewModel Settings { get; private set; } = new();
     public ConnectionStatusViewModel ConnectionStatus { get; } = new();
     public ObservableCollection<Position> OnlinePositions { get; } = [];
@@ -36,6 +39,11 @@ public sealed partial class MainWindowViewModel
         _ptt = new PttWatcher([], active => Dispatcher.UIThread.Post(() => OnPtt(active), DispatcherPriority.Send));
         ConfigureSettings(Settings);
         _bridge.Message += msg => Dispatcher.UIThread.Post(() => HandleMessage(msg));
+        // 只发要静音的 CID（引擎对没列出的默认放行），写入不设超时：引擎暂时不读 stdin 时宁可晚到，
+        // 也不能因为一份策略把整个引擎结束掉——那等于把管制员踢下语音
+        _range = new RangePolicySender(policy =>
+            _bridge.SendAsync("range_audio", RangeAudio.ToWire(policy), logFailure: false,
+                timeout: TimeSpan.FromSeconds(10), boundWrite: false));
         _feedTimer.Tick += async (_, _) => await RefreshFeedAsync();
         _feedTimer.Start();
         _syncTimer.Tick += async (_, _) => { _syncTimer.Stop(); await SyncAsync(); };
@@ -148,12 +156,20 @@ public sealed partial class MainWindowViewModel
         try
         {
             await _directory.RefreshAsync();
+            _lastFeedAt = DateTime.Now;
             var previousFsd = ConnectionStatus.FsdText;
             ConnectionStatus.UpdateFsd(_directory.Roster.ContainsKey(cid), _directory.LastUpdatedAt!.Value, _directory.RequestMilliseconds);
             if (previousFsd != ConnectionStatus.FsdText) AppLog.Info(ConnectionStatus.FsdText);
             OnlinePositions.Clear();
             foreach (var position in _directory.Positions) OnlinePositions.Add(position);
-            if (IsConnected) ApplyDuty(_directory.Positions.Where(p => p.Cid == _sessionCid).ToList());
+            if (IsConnected)
+            {
+                ApplyDuty(_directory.Positions.Where(p => p.Cid == _sessionCid).ToList());
+                // 每次刷新都推完整快照：变了就立即生效，没变也顺带重发一次，覆盖引擎重连或丢命令
+                var policy = RangeAudio.BuildPolicy(_sessionCid, _directory.Peers, out var unavailable);
+                NoteRangeAvailability(unavailable);
+                SubmitRangePolicy(policy);
+            }
         }
         catch (Exception ex)
         {
@@ -161,8 +177,38 @@ public sealed partial class MainWindowViewModel
             AppLog.Error("席位数据更新失败", ex);
             if (IsConnected) ApplyDuty([]);
             StatusText = "席位数据读取失败，暂时仅收听：" + ex.Message;
+            // 读不到就保留上一份快照，但不能无限期保留
+            if (IsConnected && RangeAudio.PolicyExpired(_lastFeedAt, DateTime.Now) && _range.Latest?.ContainsValue(false) == true)
+            {
+                NoteRangeAvailability($"数据源已 {(DateTime.Now - _lastFeedAt).TotalSeconds:F0} 秒读取失败");
+                SubmitRangePolicy([]);
+            }
         }
         finally { _refreshing = false; }
+    }
+
+    /// <summary>
+    /// 距离静音：把 CID → allow 完整快照交给语音引擎（range_audio）。只交出去、不等回执，
+    /// 见 <see cref="RangePolicySender"/>。数据源读取失败时不调这里，引擎里保留上一份。
+    /// </summary>
+    private void NoteRangeAvailability(string? unavailable)
+    {
+        if (unavailable == _rangeUnavailable) return;
+        AppLog.Info(unavailable is null ? "距离静音已恢复" : $"距离静音暂停（{unavailable}），所有人放行");
+        _rangeUnavailable = unavailable;
+    }
+
+    private void SubmitRangePolicy(Dictionary<string, bool> policy)
+    {
+        var previous = _range.Latest;
+        if (previous is null || !RangeAudio.SameAs(previous, policy))
+        {
+            var muted = policy.Where(p => !p.Value).Select(p => _directory.Roster.GetValueOrDefault(p.Key, p.Key)).Order().ToList();
+            var before = previous?.Count(p => !p.Value) ?? 0;
+            if (muted.Count > 0 || before > 0)
+                AppLog.Info(muted.Count == 0 ? "距离静音：没有超出收听范围的人" : $"距离静音：{muted.Count} 人超出收听范围（{string.Join(", ", muted)}）");
+        }
+        _range.Submit(policy);
     }
 
     private void ApplyDuty(List<Position> own)
@@ -299,8 +345,12 @@ public sealed partial class MainWindowViewModel
                 var state = kind.GetString() == "fatal" ? "error" : msg.GetProperty("state").GetString() ?? "";
                 ConnectionStatus.SetVoiceState(state);
                 AppLog.Info($"语音状态 {state}：{StatusText}");
-                if (kind.GetString() == "fatal" || msg.GetProperty("state").GetString() is "error" or "stopped")
+                // 重连后再推一次：引擎会保留快照，但协议要求 online 后重发，防止中途丢了
+                if (state == "online" && IsConnected) _range.Resend();
+                if (ConnectionStatusViewModel.IsTerminalVoiceState(state))
                 {
+                    _range.Clear();
+                    _rangeUnavailable = null;
                     IsConnected = false; IsTransmitting = false; IsReceiving = false;
                     Stations.Clear(); _syncTimer.Stop();
                 }
@@ -320,6 +370,7 @@ public sealed partial class MainWindowViewModel
 
     public async ValueTask DisposeAsync()
     {
+        _range.Clear();
         _feedTimer.Stop(); _syncTimer.Stop(); _directory.Dispose();
         StopPttCapture();
         _ptt.Dispose();

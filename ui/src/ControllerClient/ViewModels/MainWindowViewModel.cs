@@ -47,6 +47,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
     public void Disconnect()
     {
         _ = ExecuteAsync("disconnect");
+        _range.Clear();                 // 引擎断开时清空快照，下次连上重新推
+        _rangeUnavailable = null;
         ConnectionStatus.SetVoiceState("stopped");
         AppLog.Info("用户断开语音连接");
         IsConnected = false;

@@ -15,6 +15,8 @@ public sealed class VoiceBridge : IAsyncDisposable
 {
     private Process? _process;
     private readonly SemaphoreSlim _write = new(1);
+    private readonly object _lifecycle = new();
+    private readonly CancellationTokenSource _shutdown = new();
     private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonElement>> _pending = new();
     private int _sequence;
     private bool _stopping;
@@ -44,9 +46,28 @@ public sealed class VoiceBridge : IAsyncDisposable
             .FirstOrDefault(path => File.Exists(Path.Combine(path, "controller", "bridge.py")));
     }
 
-    public async Task StartAsync()
+    public Task StartAsync()
+    {
+        StartProcess();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>确保引擎在跑，并在同一把锁里取出这一次要写的进程，免得并发重启把它换掉。</summary>
+    private Process StartProcess()
+    {
+        lock (_lifecycle)
+        {
+            ObjectDisposedException.ThrowIf(_stopping, this);
+            StartCore();
+            return _process!;
+        }
+    }
+
+    private void StartCore()
     {
         if (_process is { HasExited: false }) return;
+        // 旧读取任务可能尚未退出；其请求不能遗留到新进程的生命周期中。
+        if (_process is not null) FailPending(new IOException("Python 语音引擎已退出。"));
         var configured = Environment.GetEnvironmentVariable("CAN_PYTHON");
         var bundled = Path.Combine(Root, "controller", "can-voice.exe");
         var useBundled = configured is null && File.Exists(bundled);
@@ -91,12 +112,18 @@ public sealed class VoiceBridge : IAsyncDisposable
                     else Message?.Invoke(msg);
                 }
             }
-            catch (Exception ex) { AppLog.Error("语音桥接读取失败", ex); FailPending(ex); }
+            catch (Exception ex) { AppLog.Error("语音桥接读取失败", ex); }
             finally
             {
                 AppLog.Info("语音引擎输出已关闭");
-                FailPending(new IOException("Python 语音引擎已退出，请检查 logs 文件夹和 Python 依赖。"));
-                if (!_stopping) Message?.Invoke(JsonSerializer.SerializeToElement(new { @event = "fatal", message = "语音引擎已退出，请检查 logs 文件夹。" }));
+                lock (_lifecycle)
+                {
+                    if (ReferenceEquals(_process, process))
+                    {
+                        FailPending(new IOException("Python 语音引擎已退出，请检查 logs 文件夹和 Python 依赖。"));
+                        if (!_stopping) Message?.Invoke(JsonSerializer.SerializeToElement(new { @event = "fatal", message = "语音引擎已退出，请检查 logs 文件夹。" }));
+                    }
+                }
             }
         });
     }
@@ -107,32 +134,71 @@ public sealed class VoiceBridge : IAsyncDisposable
             if (_pending.TryRemove(pair.Key, out var completion)) completion.TrySetException(error);
     }
 
-    public async Task<JsonElement> SendAsync(string command, object? data = null)
+    /// <param name="boundWrite">
+    /// true（默认）：超时也覆盖写入管道，写不进去就结束引擎——半条 JSON 留在管道里会让之后每条命令都读错。
+    /// false：写入只在关闭时取消，超时只管回执。给可以晚到、但绝不能为它丢掉整条语音连接的命令用
+    /// （距离静音策略）：写不进去说明引擎此刻不读 stdin，这时任何命令都写不进去，等它读就是了。
+    /// </param>
+    public async Task<JsonElement> SendAsync(string command, object? data = null, bool logFailure = true,
+        TimeSpan? timeout = null, bool boundWrite = true)
     {
-        await StartAsync();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        deadline.CancelAfter(timeout ?? TimeSpan.FromSeconds(90));
+        var writeToken = boundWrite ? deadline.Token : _shutdown.Token;
+        var process = StartProcess();
         var id = Interlocked.Increment(ref _sequence);
         var completion = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[id] = completion;
         try
         {
-            await _write.WaitAsync();
-            try { await _process!.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { id, command, data })); }
+            await _write.WaitAsync(writeToken);
+            try
+            {
+                writeToken.ThrowIfCancellationRequested();
+                // 写入超时可能留下半条 JSON；结束此进程并等写入退出，再释放写锁。
+                var write = process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { id, command, data }));
+                try { await write.WaitAsync(writeToken); }
+                catch
+                {
+                    if (!process.HasExited) process.Kill(entireProcessTree: true);
+                    try { await write; } catch { }
+                    throw;
+                }
+            }
             finally { _write.Release(); }
-            return await completion.Task.WaitAsync(TimeSpan.FromSeconds(90));
+            return await completion.Task.WaitAsync(deadline.Token);
         }
-        catch (Exception ex) { AppLog.Error($"语音命令失败：{command}", ex); throw; }
+        catch (OperationCanceledException) when (!_shutdown.IsCancellationRequested)
+        {
+            var error = new TimeoutException($"语音命令超时：{command}");
+            if (logFailure) AppLog.Error(error.Message, error);
+            throw error;
+        }
+        catch (Exception ex) { if (logFailure) AppLog.Error($"语音命令失败：{command}", ex); throw; }
         finally { _pending.TryRemove(id, out _); }
     }
 
     public async ValueTask DisposeAsync()
     {
-        _stopping = true;
-        if (_process is { HasExited: false } process)
+        Process? process;
+        lock (_lifecycle)
         {
-            process.StandardInput.Close();
-            try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)); }
-            catch (TimeoutException) { process.Kill(entireProcessTree: true); }
+            if (_stopping) return;
+            _stopping = true;
+            process = _process;
         }
-        _process?.Dispose();
+        _shutdown.Cancel();
+        await _write.WaitAsync();
+        try
+        {
+            if (process is { HasExited: false })
+            {
+                process.StandardInput.Close();
+                try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)); }
+                catch (TimeoutException) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
+            }
+        }
+        finally { _write.Release(); }
+        // 读取任务仍可能查询 HasExited，Process 随桥接对象一起回收。
     }
 }
