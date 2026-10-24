@@ -11,9 +11,8 @@ CAN 管制语音客户端正式版，使用 C# / .NET 10 / Avalonia 12.1。UI �
 | 系统 | 下载 |
 |---|---|
 | Windows x64 | `can-audio-client-<版本>-win-x64.zip` |
-| macOS 14+，Apple 芯片和 Intel 通用 | `can-audio-client-<版本>-macos-universal.zip` |
+| macOS 14+，Apple 芯片（ARM64） | `can-audio-client-<版本>-macos-arm64.zip` |
 | Linux x64（glibc 2.35+：Arch、Ubuntu 22.04+、Debian 12+、Fedora 36+ 等） | `can-audio-client-<版本>-linux-x64.tar.gz` |
-| Arch Linux | `PKGBUILD` + `can-audio-client.install` |
 
 ### Windows
 
@@ -33,7 +32,7 @@ can-audio-client-<版本>-win-x64/
 
 ### macOS
 
-解压后把 `CAN Audio.app` 拖进「应用程序」。一个 .app 同时带 Apple 芯片和 Intel 两套程序，启动时按本机架构选择。
+仅支持 Apple 芯片（ARM64）。解压后把 `CAN Audio.app` 拖进「应用程序」。
 
 - 包只有 ad-hoc 签名、未经 Apple 公证，第一次打开会被拦下：在「系统设置 → 隐私与安全性」底部点「仍要打开」，
   或在终端执行 `xattr -dr com.apple.quarantine "/Applications/CAN Audio.app"`。
@@ -49,9 +48,6 @@ cd can-audio-client-<版本>-linux-x64
 ./ControllerClient        # 直接运行
 ./install.sh              # 可选：给当前用户加菜单入口（程序留在原目录）
 ```
-
-Arch 用户也可以下载 Release 里的 `PKGBUILD` 和 `can-audio-client.install` 放在同一目录执行 `makepkg -si`，
-装到 `/opt/can-audio-client`，命令为 `can-audio-client`。
 
 - **全局 PTT 需要 `input` 组**：程序直接读 `/dev/input`，X11 和 Wayland 下都能在任何窗口响应，且不拦截按键。
   执行 `sudo usermod -aG input "$USER"` 后重新登录。不在 `input` 组时键盘 PTT 退回 X11 轮询（Wayland 下只在
@@ -105,7 +101,7 @@ can-audio\.venv\Scripts\python.exe -m unittest discover -s can-audio/controller 
 ```
 
 仅编译 C# 单文件程序：`pwsh -File ./build.ps1`，输出 `dist/CanAudio-<运行时>/`；`-Runtime` 可选 `win-x64`、`linux-x64`、
-`osx-arm64`、`osx-x64`，默认本机（C# 部分可以在任何系统上交叉编译）。使用 .NET 10 自包含单文件发布、
+`osx-arm64`，默认按本机系统选择（C# 部分可以在任何系统上交叉编译）。使用 .NET 10 自包含单文件发布、
 压缩、原生库自解压，托管 DLL 合并到 EXE；不裁剪反射所需类型。
 
 本地生成完整便携包（PyInstaller 把 `can-audio/controller` 打成 `can-voice.exe`，并验包）：
@@ -120,8 +116,8 @@ pwsh -File ./package-release.ps1
 - Linux：自动使用系统的 `libopus.so.0`；Ubuntu 22.04 上编的包能在 glibc 2.35 以上的发行版运行，在 Arch 上编的只保证 Arch。
   `libasound` 不随包，用目标系统自己的（ALSA 插件路径是编进库里的，带别的发行版的会找不到 PipeWire 插件）。
 - macOS：先 `packaging/macos/build-native.sh native` 编 libopus 和 PortAudio（按 `MACOSX_DEPLOYMENT_TARGET`，默认 14.0），
-  用它装 PyAudio，再 `pwsh -File ./package-release.ps1 -OpusLibrary native/lib/libopus.0.dylib`。两种芯片各打一份后，
-  `packaging/macos/make-app.sh <版本> <arm64 包目录> <x64 包目录> <app.icns> <输出目录>` 合成通用的 `CAN Audio.app`
+  在 Apple 芯片 Mac 上用它装 PyAudio，再 `pwsh -File ./package-release.ps1 -Runtime osx-arm64 -OpusLibrary native/lib/libopus.0.dylib`。
+  `packaging/macos/make-app.sh <版本> <arm64 包目录> <app.icns> <输出目录>` 打成 ARM64 `CAN Audio.app`
   （图标用 `python packaging/icons.py ui/src/ControllerClient/app.ico <目录>` 生成）。CI 的 `build-macos` / `macos-app` 就是这几步。
 
 可选降噪库：Windows 用 CMake 和 Visual Studio C++ x64 工具执行 `pwsh -File can-audio/native/rnnoise/build.ps1 -Out can-audio/controller`；

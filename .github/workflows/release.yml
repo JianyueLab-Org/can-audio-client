@@ -17,9 +17,8 @@
 # controller/voice-engine.txt 里。
 #
 # 三个系统各在自己的 runner 上打（PyInstaller 不支持交叉编译）：
-#   Windows x64 → zip；Linux x64 → tar.gz + 填好版本和校验和的 Arch PKGBUILD（Ubuntu 22.04 上编，
-#   glibc 2.35 起的发行版都能跑）；macOS 在 Apple 芯片和 Intel 两台 runner 上各打一份，
-#   再合成一个通用的 CAN Audio.app（packaging/macos/make-app.sh）。
+#   Windows x64 → zip；Linux x64 → tar.gz（Ubuntu 22.04 上编，glibc 2.35 起的发行版都能跑）；
+#   macOS 只在 Apple 芯片 runner 上构建 ARM64 CAN Audio.app（packaging/macos/make-app.sh）。
 
 name: 编译与发布
 
@@ -246,24 +245,12 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: can-audio-client-linux
-          path: |
-            dist/can-audio-client-*.tar.gz
-            dist/PKGBUILD
-            dist/can-audio-client.install
+          path: dist/can-audio-client-*.tar.gz
           if-no-files-found: error
 
   build-macos:
     needs: version
-    strategy:
-      # 两种芯片各自出结果：一个失败时另一个照样跑完，排查不用再推一轮
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15          # Apple 芯片
-            rid: osx-arm64
-          - runner: macos-15-intel    # Intel
-            rid: osx-x64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15          # Apple 芯片（ARM64）
     env:
       # opus、PortAudio、rnnoise、PyAudio 都按这个版本编；numpy 的 wheel 本身也要求 14
       MACOSX_DEPLOYMENT_TARGET: '14.0'
@@ -281,7 +268,7 @@ jobs:
         with:
           # 安装名是绝对路径，缓存还原到同一个位置才能用
           path: ${{ github.workspace }}/native
-          key: native-${{ matrix.rid }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('packaging/macos/build-native.sh') }}
+          key: native-osx-arm64-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('packaging/macos/build-native.sh') }}
       - name: 构建 libopus、PortAudio
         if: steps.native.outputs.cache-hit != 'true'
         run: packaging/macos/build-native.sh "$GITHUB_WORKSPACE/native"
@@ -304,15 +291,15 @@ jobs:
         shell: pwsh
         env:
           CAN_VERSION: ${{ needs.version.outputs.number }}
-        run: ./package-release.ps1 -Runtime ${{ matrix.rid }} -Python python -OpusLibrary "$env:GITHUB_WORKSPACE/native/lib/libopus.0.dylib"
+        run: ./package-release.ps1 -Runtime osx-arm64 -Python python -OpusLibrary "$env:GITHUB_WORKSPACE/native/lib/libopus.0.dylib"
       - uses: actions/upload-artifact@v7
         with:
-          name: macos-${{ matrix.rid }}
-          path: dist/can-audio-client-*-${{ matrix.rid }}.tar.gz
+          name: macos-osx-arm64
+          path: dist/can-audio-client-*-osx-arm64.tar.gz
           if-no-files-found: error
 
   macos-app:
-    # 两种芯片的包合成一个通用 .app：启动器是通用二进制，按本机架构进对应目录
+    # 将 ARM64 包装进 .app，并编译 ARM64 启动器
     needs: [version, build-macos]
     runs-on: macos-15
     env:
@@ -321,26 +308,25 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          pattern: macos-osx-*
-          merge-multiple: true
+          name: macos-osx-arm64
           path: parts
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - name: 合成 CAN Audio.app
+      - name: 打包 ARM64 CAN Audio.app
         env:
           VERSION: ${{ needs.version.outputs.number }}
         run: |
           set -euo pipefail
-          for rid in osx-arm64 osx-x64; do tar -xzf "parts/can-audio-client-$VERSION-$rid.tar.gz" -C parts; done
+          tar -xzf "parts/can-audio-client-$VERSION-osx-arm64.tar.gz" -C parts
           pip install pillow
           python packaging/icons.py ui/src/ControllerClient/app.ico icons
           packaging/macos/make-app.sh "$VERSION" "parts/can-audio-client-$VERSION-osx-arm64" \
-            "parts/can-audio-client-$VERSION-osx-x64" icons/app.icns out
+            icons/app.icns out
       - uses: actions/upload-artifact@v7
         with:
           name: can-audio-client-macos
-          path: out/can-audio-client-*-macos-universal.zip
+          path: out/can-audio-client-*-macos-arm64.zip
           if-no-files-found: error
 
   release:
@@ -385,8 +371,6 @@ jobs:
           files: |
             packages/*.zip
             packages/*.tar.gz
-            packages/PKGBUILD
-            packages/can-audio-client.install
             packages/SHA256SUMS
           generate_release_notes: true
           body: |
@@ -397,9 +381,8 @@ jobs:
             | 系统 | 下载 | 用法 |
             |---|---|---|
             | Windows x64 | `can-audio-client-${{ needs.version.outputs.number }}-win-x64.zip` | 解压后运行 `ControllerClient.exe`，保留整个目录 |
-            | macOS 14+（Apple 芯片 / Intel 通用） | `can-audio-client-${{ needs.version.outputs.number }}-macos-universal.zip` | 解压后把 `CAN Audio.app` 拖进「应用程序」；未经公证，首次打开见 README |
+            | macOS 14+（Apple 芯片，ARM64） | `can-audio-client-${{ needs.version.outputs.number }}-macos-arm64.zip` | 解压后把 `CAN Audio.app` 拖进「应用程序」；未经公证，首次打开见 README |
             | Linux x64 | `can-audio-client-${{ needs.version.outputs.number }}-linux-x64.tar.gz` | 解压后运行 `ControllerClient`，`./install.sh` 加菜单入口 |
-            | Arch Linux | `PKGBUILD` + `can-audio-client.install` | 放进同一目录后 `makepkg -si` |
 
             macOS 要在「隐私与安全性」里允许输入监控和麦克风；Linux 的全局 PTT 要求用户在 `input` 组。
 

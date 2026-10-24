@@ -9,11 +9,12 @@
 # macOS / Linux 用 -OpusLibrary 指定的 libopus（Linux 不给时找系统的），controller/ 里有
 # librnnoise.so / librnnoise.dylib 时一起带上（packaging/build-rnnoise.sh 构建）。
 #
-# 产物：win-x64 → zip；linux-x64 → tar.gz 和填好版本、校验和的 Arch PKGBUILD；
-# osx-* → tar.gz，再由 packaging/macos/make-app.sh 把两种芯片的合成通用 .app。
+# 产物：win-x64 → zip；linux-x64 → tar.gz；
+# osx-arm64 → tar.gz，再由 packaging/macos/make-app.sh 打成 ARM64 .app。
 param(
+    [ValidateSet('win-x64', 'linux-x64', 'osx-arm64')]
     [string]$Runtime = $(if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'win-x64' }
-                         elseif ($IsMacOS) { if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+                         elseif ($IsMacOS) { 'osx-arm64' }
                          else { 'linux-x64' }),
     [string]$VoiceRepo = "$PSScriptRoot/can-audio",
     [string]$Python = $(if ($IsWindows -or $env:OS -eq 'Windows_NT') { "$VoiceRepo/.venv/Scripts/python.exe" } else { "$VoiceRepo/.venv/bin/python" }),
@@ -139,15 +140,5 @@ if ($windows) {
     tar -czf $archive -C $dist $name
     if ($LASTEXITCODE) { throw '打 tar 包失败' }
 }
-$hash = Write-Checksum $archive
-if ($Runtime -like 'linux-*' -and $env:CAN_VERSION) {
-    # Arch 用户直接 makepkg 的 PKGBUILD：版本和校验和都填好，和这个 tar 包一一对应。
-    # 只给正式版生成：pkgver 不能带 -dev，而且下载地址指向 Release
-    $install = Join-Path $packaging 'arch/can-audio-client.install'
-    Copy-Item $install $dist
-    $installHash = (Get-FileHash -LiteralPath $install -Algorithm SHA256).Hash.ToLowerInvariant()
-    $pkgbuild = (Get-Content -Raw (Join-Path $packaging 'arch/PKGBUILD.in')).
-        Replace('@VERSION@', $version).Replace('@SHA256@', $hash).Replace('@INSTALL_SHA256@', $installHash)
-    [IO.File]::WriteAllText((Join-Path $dist 'PKGBUILD'), $pkgbuild, [Text.UTF8Encoding]::new($false))
-}
+Write-Checksum $archive | Out-Null
 $archive

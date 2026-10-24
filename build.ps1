@@ -1,7 +1,8 @@
-# 编译 C# 单文件程序。-Runtime 默认取本机：win-x64 / linux-x64 / osx-arm64 / osx-x64。
+# 编译 C# 单文件程序。-Runtime 默认按本机系统选择：win-x64 / linux-x64 / osx-arm64。
 param(
+    [ValidateSet('win-x64', 'linux-x64', 'osx-arm64')]
     [string]$Runtime = $(if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'win-x64' }
-                         elseif ($IsMacOS) { if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+                         elseif ($IsMacOS) { 'osx-arm64' }
                          else { 'linux-x64' }),
     [string]$Out = "$PSScriptRoot/dist/CanAudio-$Runtime"
 )
