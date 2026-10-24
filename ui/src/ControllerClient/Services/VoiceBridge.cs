@@ -7,9 +7,9 @@ namespace ControllerClient.Services;
 
 /// <summary>
 /// 通过标准输入输出调用 Python 语音引擎，凭据不进入命令行。
-/// 引擎不在本仓库：发行包里是打包好的 controller/can-voice.exe；从源码跑时用
+/// 引擎不在本仓库：发行包里是打包好的 controller/can-voice(.exe)；从源码跑时用
 /// JianyueLab-Org/can-audio（new-client-sys 分支）的 controller/bridge.py，
-/// 默认找仓库里的 can-audio/（sync-voice.ps1 拉取），或用 CAN_AUDIO_DIR 指向别处的检出。
+/// 默认找仓库里的 can-audio/（sync-voice 脚本拉取），或用 CAN_AUDIO_DIR 指向别处的检出。
 /// </summary>
 public sealed class VoiceBridge : IAsyncDisposable
 {
@@ -21,7 +21,9 @@ public sealed class VoiceBridge : IAsyncDisposable
     private int _sequence;
     private bool _stopping;
     public event Action<JsonElement>? Message;
-    /// <summary>发行包目录（含 controller/can-voice.exe），从源码跑时是本仓库根目录。</summary>
+    /// <summary>打包好的语音引擎文件名：Windows 带 .exe，macOS / Linux 没有扩展名。</summary>
+    public static string EngineName { get; } = OperatingSystem.IsWindows() ? "can-voice.exe" : "can-voice";
+    /// <summary>发行包目录（含 controller/can-voice），从源码跑时是本仓库根目录。</summary>
     public static string Root { get; } = FindRoot();
     /// <summary>can-audio 检出目录；没有时为 null。</summary>
     public static string? VoiceRepo { get; } = FindVoiceRepo();
@@ -34,7 +36,7 @@ public sealed class VoiceBridge : IAsyncDisposable
     }
 
     private static string FindRoot() =>
-        Ancestors().FirstOrDefault(dir => File.Exists(Path.Combine(dir.FullName, "controller", "can-voice.exe")) ||
+        Ancestors().FirstOrDefault(dir => File.Exists(Path.Combine(dir.FullName, "controller", EngineName)) ||
                                           File.Exists(Path.Combine(dir.FullName, "can-audio", "controller", "bridge.py")))
             ?.FullName ?? AppContext.BaseDirectory;
 
@@ -69,13 +71,15 @@ public sealed class VoiceBridge : IAsyncDisposable
         // 旧读取任务可能尚未退出；其请求不能遗留到新进程的生命周期中。
         if (_process is not null) FailPending(new IOException("Python 语音引擎已退出。"));
         var configured = Environment.GetEnvironmentVariable("CAN_PYTHON");
-        var bundled = Path.Combine(Root, "controller", "can-voice.exe");
+        var bundled = Path.Combine(Root, "controller", EngineName);
         var useBundled = configured is null && File.Exists(bundled);
         var bridge = VoiceRepo is null ? null : Path.Combine(VoiceRepo, "controller", "bridge.py");
         if (!useBundled && (bridge is null || !File.Exists(bridge)))
-            throw new FileNotFoundException("找不到语音引擎：发行包缺少 controller/can-voice.exe；从源码运行请先执行 sync-voice.ps1 拉取 can-audio，或设置 CAN_AUDIO_DIR。");
+            throw new FileNotFoundException($"找不到语音引擎：发行包缺少 controller/{EngineName}；从源码运行请先执行 sync-voice 脚本拉取 can-audio，或设置 CAN_AUDIO_DIR。");
+        var venvPython = OperatingSystem.IsWindows() ? Path.Combine(".venv", "Scripts", "python.exe") : Path.Combine(".venv", "bin", "python");
         var python = configured ?? new[] { VoiceRepo, Root }.Where(dir => dir is not null)
-            .Select(dir => Path.Combine(dir!, ".venv", "Scripts", "python.exe")).FirstOrDefault(File.Exists) ?? "python";
+            .Select(dir => Path.Combine(dir!, venvPython)).FirstOrDefault(File.Exists)
+            ?? (OperatingSystem.IsWindows() ? "python" : "python3");
         var info = new ProcessStartInfo(useBundled ? bundled : python)
         {
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,

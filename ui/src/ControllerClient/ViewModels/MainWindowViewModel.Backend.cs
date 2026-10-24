@@ -312,6 +312,8 @@ public sealed partial class MainWindowViewModel
             StopPttCapture();
         }));
         _capture.Start();
+        // macOS 缺输入监控权限、Linux 不在 input 组时，录不到任何按键，要告诉用户为什么
+        if (InputHooks.Problem is { } problem) Settings.PttStatusText = problem;
     }
 
     private void StopPttCapture()

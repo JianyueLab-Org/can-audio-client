@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -60,6 +61,64 @@ public static class PttKeys
             return null;
         }
     }
+
+    // macOS / Linux 的键码是物理位置，没有可靠的后台线程布局翻译，按美式布局取名。
+    // 修饰键、功能键与 Windows 同名，同一份设置文件在三个系统上指同一个键。
+    private const string Row1 = "1234567890-=", RowQ = "qwertyuiop[]", RowA = "asdfghjkl;'`", RowZ = "\\zxcvbnm,./";
+    private static readonly Dictionary<int, string> Evdev = BuildEvdev();
+    private static readonly Dictionary<int, string> Mac = BuildMac();
+
+    private static Dictionary<int, string> BuildEvdev()
+    {
+        var keys = new Dictionary<int, string>
+        {
+            [1] = "esc", [14] = "backspace", [15] = "tab", [28] = "enter", [29] = "ctrl_l", [42] = "shift",
+            [54] = "shift_r", [55] = "*", [56] = "alt_l", [57] = "space", [58] = "caps_lock", [69] = "num_lock",
+            [70] = "scroll_lock", [71] = "7", [72] = "8", [73] = "9", [74] = "-", [75] = "4", [76] = "5", [77] = "6",
+            [78] = "+", [79] = "1", [80] = "2", [81] = "3", [82] = "0", [83] = ".", [87] = "f11", [88] = "f12",
+            [96] = "enter", [97] = "ctrl_r", [98] = "/", [99] = "print_screen", [100] = "alt_r", [102] = "home",
+            [103] = "up", [104] = "page_up", [105] = "left", [106] = "right", [107] = "end", [108] = "down",
+            [109] = "page_down", [110] = "insert", [111] = "delete", [113] = "media_volume_mute",
+            [114] = "media_volume_down", [115] = "media_volume_up", [119] = "pause", [125] = "cmd", [126] = "cmd_r",
+            [127] = "menu", [163] = "media_next", [164] = "media_play_pause", [165] = "media_previous", [166] = "media_stop"
+        };
+        for (var i = 0; i < Row1.Length; i++) keys[2 + i] = Row1[i].ToString();
+        for (var i = 0; i < RowQ.Length; i++) keys[16 + i] = RowQ[i].ToString();
+        for (var i = 0; i < RowA.Length; i++) keys[30 + i] = RowA[i].ToString();
+        for (var i = 0; i < RowZ.Length; i++) keys[43 + i] = RowZ[i].ToString();
+        for (var i = 0; i < 10; i++) keys[59 + i] = "f" + (i + 1);
+        for (var i = 0; i < 12; i++) keys[183 + i] = "f" + (i + 13);
+        return keys;
+    }
+
+    private static Dictionary<int, string> BuildMac()
+    {
+        var keys = new Dictionary<int, string>
+        {
+            [36] = "enter", [48] = "tab", [49] = "space", [51] = "backspace", [53] = "esc", [54] = "cmd_r", [55] = "cmd",
+            [56] = "shift", [57] = "caps_lock", [58] = "alt_l", [59] = "ctrl_l", [60] = "shift_r", [61] = "alt_r",
+            [62] = "ctrl_r", [63] = "fn", [65] = ".", [67] = "*", [69] = "+", [71] = "num_lock", [72] = "media_volume_up",
+            [73] = "media_volume_down", [74] = "media_volume_mute", [75] = "/", [76] = "enter", [78] = "-", [81] = "=",
+            [114] = "insert", [115] = "home", [116] = "page_up", [117] = "delete", [119] = "end", [121] = "page_down",
+            [123] = "left", [124] = "right", [125] = "down", [126] = "up",
+            [122] = "f1", [120] = "f2", [99] = "f3", [118] = "f4", [96] = "f5", [97] = "f6", [98] = "f7", [100] = "f8",
+            [101] = "f9", [109] = "f10", [103] = "f11", [111] = "f12", [105] = "f13", [107] = "f14", [113] = "f15",
+            [106] = "f16", [64] = "f17", [79] = "f18", [80] = "f19", [90] = "f20"
+        };
+        // ANSI 键位表：下标是 macOS 虚拟键码，空格是没有字符的位置
+        const string ansi = "asdfhgzxcv bqweryt123465=97-80]ou[ip lj'k;\\,/nm.";
+        for (var i = 0; i < ansi.Length; i++) if (ansi[i] != ' ') keys[i] = ansi[i].ToString();
+        keys[50] = "`";
+        int[] keypad = [82, 83, 84, 85, 86, 87, 88, 89, 91, 92];
+        for (var i = 0; i < keypad.Length; i++) keys[keypad[i]] = i.ToString(CultureInfo.InvariantCulture);
+        return keys;
+    }
+
+    /// <summary>Linux evdev 键码（X11 键码减 8）→ 键名。</summary>
+    public static string FromEvdev(int code) => Evdev.TryGetValue(code, out var name) ? name : "evdev" + code;
+
+    /// <summary>macOS 虚拟键码（kCGKeyboardEventKeycode）→ 键名。</summary>
+    public static string FromMac(int keyCode) => Mac.TryGetValue(keyCode, out var name) ? name : "mac" + keyCode;
 
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
