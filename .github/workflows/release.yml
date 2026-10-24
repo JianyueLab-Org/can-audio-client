@@ -255,6 +255,8 @@ jobs:
   build-macos:
     needs: version
     strategy:
+      # 两种芯片各自出结果：一个失败时另一个照样跑完，排查不用再推一轮
+      fail-fast: false
       matrix:
         include:
           - runner: macos-15          # Apple 芯片

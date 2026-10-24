@@ -201,7 +201,10 @@ public sealed class VoiceBridge : IAsyncDisposable
         {
             if (process is { HasExited: false })
             {
-                process.StandardInput.Close();
+                // 写入超时刚结束掉引擎时，HasExited 可能还没反映出来（macOS 上回收得慢）；
+                // 这时关 stdin 会把缓冲里那半条命令冲进已断的管道。管道另一头已经没人了，流照样会关掉。
+                try { process.StandardInput.Close(); }
+                catch (IOException) { }
                 try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)); }
                 catch (TimeoutException) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
             }
