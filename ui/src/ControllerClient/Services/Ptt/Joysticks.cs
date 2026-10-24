@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace ControllerClient.Services.Ptt;
@@ -9,9 +10,24 @@ internal sealed record JoystickState(int Index, string Name, bool[] Buttons);
 /// SDL_Init 给 DirectInput 建的隐藏辅助窗口属于建它的线程，线程一退出窗口就没了，
 /// 之后每次开摇杆都以 E_HANDLE 失败，直到重启客户端。所以这条线程和进程同寿。
 /// 设备序号、按钮序号与旧 Python 引擎（pygame，同为 SDL2）一致，老绑定照样能用。
+/// 原生库随包（Ultz.Native.SDL：SDL2.dll / libSDL2-2.0.so / libSDL2-2.0.dylib），缺了再找系统装的。
 /// </summary>
 internal static class Joysticks
 {
+    static Joysticks() => NativeLibrary.SetDllImportResolver(typeof(Joysticks).Assembly, ResolveSdl);
+
+    /// <summary>"SDL2" 在 Linux / macOS 上的默认探测名（libSDL2.so、libSDL2.dylib）对不上随包和发行版的文件名。</summary>
+    private static IntPtr ResolveSdl(string name, Assembly assembly, DllImportSearchPath? path)
+    {
+        if (name != Sdl || OperatingSystem.IsWindows()) return IntPtr.Zero;
+        string[] candidates = OperatingSystem.IsMacOS()
+            ? ["libSDL2-2.0.dylib", "libSDL2-2.0.0.dylib", "/opt/homebrew/lib/libSDL2-2.0.0.dylib", "/usr/local/lib/libSDL2-2.0.0.dylib"]
+            : ["libSDL2-2.0.so", "libSDL2-2.0.so.0", "libSDL2.so"];
+        foreach (var candidate in candidates)
+            if (NativeLibrary.TryLoad(candidate, assembly, path, out var handle)) return handle;
+        return IntPtr.Zero;
+    }
+
     // 目标是一帧音频（20 ms）以内；Windows 默认计时器粒度 15.6 ms，Sleep(20) 实际会睡到 31 ms
     private const int PollMilliseconds = 15;
     private static readonly TimeSpan Retry = TimeSpan.FromSeconds(3); // 热插拔在飞行摇杆上很常见
@@ -131,6 +147,8 @@ internal static class Joysticks
         {
             // 窗口不在前台时照样读：管制员的焦点通常在雷达软件上
             SDL_SetHint("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1");
+            // macOS 的 GameController（MFi）后端要求主线程；摇杆、手柄走 IOKit HID 就够了
+            if (OperatingSystem.IsMacOS()) SDL_SetHint("SDL_JOYSTICK_MFI", "0");
             if (SDL_Init(0x200) != 0) // SDL_INIT_JOYSTICK
             {
                 AppLog.Write("client", "WARN", "SDL 摇杆子系统初始化失败，摇杆 PTT 不可用：" + Error());
@@ -141,13 +159,15 @@ internal static class Joysticks
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
-            AppLog.Write("client", "WARN", "找不到 SDL2.dll，摇杆 PTT 不可用：" + ex.Message);
+            AppLog.Write("client", "WARN", "找不到 SDL2 原生库，摇杆 PTT 不可用：" + ex.Message);
             return false;
         }
     }
 
+    /// <summary>只有 Windows 需要：DirectInput 的隐藏窗口靠这条线程的消息循环收设备通知。</summary>
     private static void PumpWindowMessages()
     {
+        if (!OperatingSystem.IsWindows()) return;
         while (PeekMessage(out var message, IntPtr.Zero, 0, 0, 1))
         {
             TranslateMessage(ref message);

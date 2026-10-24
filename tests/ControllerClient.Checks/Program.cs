@@ -88,6 +88,14 @@ Check(PttKeys.Name(0x56, "V") == "v" && PttKeys.Name(0x56, "v") == "v", "可打�
 Check(PttKeys.Name(0xA3, null) == "ctrl_r" && PttKeys.Name(0x20, " ") == "space" && PttKeys.Name(0xA0, null) == "shift"
       && PttKeys.Name(0x70, null) == "f1", "功能键沿用旧配置的键名");
 Check(PttKeys.Name(0xE9, null) == "vk233" && PttKeys.Name(0xE9, "\u0001") == "vk233", "无名字也无字符时退回虚拟键码");
+// 同一份设置在三个系统上指同一个键：evdev 47 / macOS 9 是 V，右 Ctrl、左 Shift、F1 与 Windows 同名
+Check(PttKeys.FromEvdev(47) == "v" && PttKeys.FromEvdev(97) == "ctrl_r" && PttKeys.FromEvdev(42) == "shift"
+      && PttKeys.FromEvdev(59) == "f1" && PttKeys.FromEvdev(57) == "space" && PttKeys.FromEvdev(11) == "0"
+      && PttKeys.FromEvdev(41) == "`" && PttKeys.FromEvdev(53) == "/" && PttKeys.FromEvdev(194) == "f24", "Linux 键名与 Windows 一致");
+Check(PttKeys.FromMac(9) == "v" && PttKeys.FromMac(62) == "ctrl_r" && PttKeys.FromMac(56) == "shift"
+      && PttKeys.FromMac(122) == "f1" && PttKeys.FromMac(49) == "space" && PttKeys.FromMac(29) == "0"
+      && PttKeys.FromMac(50) == "`" && PttKeys.FromMac(47) == "." && PttKeys.FromMac(92) == "9", "macOS 键名与 Windows 一致");
+Check(PttKeys.FromEvdev(240) == "evdev240" && PttKeys.FromMac(10) == "mac10", "无名字的键退回系统键码");
 var stick = PttBinding.Joystick(3, 1, "脚踏");
 Check(PttBinding.FromJson(stick.ToJson()) is { Kind: PttKind.Joystick, Button: 3, Device: 1, DeviceName: "脚踏" }, "摇杆绑定往返");
 Check(PttBinding.FromJson(Binding(new { kind = "keyboard", key = "V" }))!.Key == "v", "键盘绑定读入时转小写");

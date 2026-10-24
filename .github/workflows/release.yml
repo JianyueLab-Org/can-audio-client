@@ -16,7 +16,10 @@
 # 推了 can-audio，测试过的和打进包里的就不是同一份代码。用的是哪个提交写在 Release 说明和包里的
 # controller/voice-engine.txt 里。
 #
-# 只能在 Windows 上打：PyAudio、opus.dll 都是 Windows 的，PyInstaller 也不支持交叉编译。
+# 三个系统各在自己的 runner 上打（PyInstaller 不支持交叉编译）：
+#   Windows x64 → zip；Linux x64 → tar.gz + 填好版本和校验和的 Arch PKGBUILD（Ubuntu 22.04 上编，
+#   glibc 2.35 起的发行版都能跑）；macOS 在 Apple 芯片和 Intel 两台 runner 上各打一份，
+#   再合成一个通用的 CAN Audio.app（packaging/macos/make-app.sh）。
 
 name: 编译与发布
 
@@ -188,10 +191,162 @@ jobs:
           path: dist/can-audio-client-*.zip
           if-no-files-found: error
 
+  test-unix:
+    # C# 检查在 Linux / macOS 上也跑：子进程管道背压、路径、PTT 键名表都和系统有关
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: C# 检查
+        run: dotnet run --project tests/ControllerClient.Checks -c Release
+
+  build-linux:
+    needs: version
+    # 用较老的 Ubuntu 编：PyInstaller 的引导程序和随包的库要求运行机器的 glibc 不比编译机旧
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.VOICE_REPO }}
+          ref: ${{ needs.version.outputs.voice_sha }}
+          path: can-audio
+      - name: 系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends portaudio19-dev libopus0 cmake
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: can-audio/requirements-*.txt
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r can-audio/requirements-build.txt pillow
+      - name: 构建 librnnoise.so
+        run: packaging/build-rnnoise.sh can-audio can-audio/controller
+      - name: 编译并打包
+        shell: pwsh
+        env:
+          CAN_VERSION: ${{ needs.version.outputs.number }}
+        # 脚本自己会验包：can-voice 带没带 libopus / librnnoise、冻结后的语音引擎能不能回协议
+        run: ./package-release.ps1 -Runtime linux-x64 -Python python
+      - uses: actions/upload-artifact@v7
+        with:
+          name: can-audio-client-linux
+          path: |
+            dist/can-audio-client-*.tar.gz
+            dist/PKGBUILD
+            dist/can-audio-client.install
+          if-no-files-found: error
+
+  build-macos:
+    needs: version
+    strategy:
+      # 两种芯片各自出结果：一个失败时另一个照样跑完，排查不用再推一轮
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15          # Apple 芯片
+            rid: osx-arm64
+          - runner: macos-15-intel    # Intel
+            rid: osx-x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      # opus、PortAudio、rnnoise、PyAudio 都按这个版本编；numpy 的 wheel 本身也要求 14
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.VOICE_REPO }}
+          ref: ${{ needs.version.outputs.voice_sha }}
+          path: can-audio
+      - uses: actions/cache@v6
+        id: native
+        with:
+          # 安装名是绝对路径，缓存还原到同一个位置才能用
+          path: ${{ github.workspace }}/native
+          key: native-${{ matrix.rid }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('packaging/macos/build-native.sh') }}
+      - name: 构建 libopus、PortAudio
+        if: steps.native.outputs.cache-hit != 'true'
+        run: packaging/macos/build-native.sh "$GITHUB_WORKSPACE/native"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Python 依赖
+        run: |
+          python -m pip install --upgrade pip
+          # PyAudio 没有 macOS 的 wheel，按上面编的 PortAudio 从源码编
+          CFLAGS="-I$GITHUB_WORKSPACE/native/include" LDFLAGS="-L$GITHUB_WORKSPACE/native/lib" \
+            pip install --no-binary pyaudio --no-cache-dir pyaudio
+          pip install -r can-audio/requirements-build.txt
+      - name: 构建 librnnoise.dylib
+        run: packaging/build-rnnoise.sh can-audio can-audio/controller
+      - name: 编译并打包
+        shell: pwsh
+        env:
+          CAN_VERSION: ${{ needs.version.outputs.number }}
+        run: ./package-release.ps1 -Runtime ${{ matrix.rid }} -Python python -OpusLibrary "$env:GITHUB_WORKSPACE/native/lib/libopus.0.dylib"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-${{ matrix.rid }}
+          path: dist/can-audio-client-*-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+
+  macos-app:
+    # 两种芯片的包合成一个通用 .app：启动器是通用二进制，按本机架构进对应目录
+    needs: [version, build-macos]
+    runs-on: macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: macos-osx-*
+          merge-multiple: true
+          path: parts
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: 合成 CAN Audio.app
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: |
+          set -euo pipefail
+          for rid in osx-arm64 osx-x64; do tar -xzf "parts/can-audio-client-$VERSION-$rid.tar.gz" -C parts; done
+          pip install pillow
+          python packaging/icons.py ui/src/ControllerClient/app.ico icons
+          packaging/macos/make-app.sh "$VERSION" "parts/can-audio-client-$VERSION-osx-arm64" \
+            "parts/can-audio-client-$VERSION-osx-x64" icons/app.icns out
+      - uses: actions/upload-artifact@v7
+        with:
+          name: can-audio-client-macos
+          path: out/can-audio-client-*-macos-universal.zip
+          if-no-files-found: error
+
   release:
     # 只有推到 main 才发。手动触发和 PR 只出产物，方便试包而不占版本号。
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [version, test, build]
+    needs: [version, test, test-unix, build, build-linux, macos-app]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -200,7 +355,9 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: can-audio-client
+          # can-audio-client（Windows）、-linux、-macos 三份产物放进同一个目录
+          pattern: can-audio-client*
+          merge-multiple: true
           path: packages
 
       - name: 生成发布包 SHA-256 清单
@@ -208,7 +365,7 @@ jobs:
         run: |
           set -euo pipefail
           cd packages
-          sha256sum *.zip > SHA256SUMS
+          sha256sum *.zip *.tar.gz > SHA256SUMS
           test -s SHA256SUMS
           cat SHA256SUMS
 
@@ -227,15 +384,24 @@ jobs:
           name: ${{ needs.version.outputs.tag }}
           files: |
             packages/*.zip
+            packages/*.tar.gz
+            packages/PKGBUILD
+            packages/can-audio-client.install
             packages/SHA256SUMS
           generate_release_notes: true
           body: |
             ## CAN Audio 管制语音客户端 ${{ needs.version.outputs.tag }}
 
-            下载 `can-audio-client-${{ needs.version.outputs.number }}-win-x64.zip`，解压后运行
-            `ControllerClient.exe`。需要 Windows x64；包里自带 .NET 运行时和语音引擎，
-            **无需安装 .NET 或 Python**。保留整个目录，不要单独复制 EXE——语音引擎在
-            `controller/can-voice.exe`。
+            包里自带 .NET 运行时和语音引擎，**无需安装 .NET 或 Python**。
+
+            | 系统 | 下载 | 用法 |
+            |---|---|---|
+            | Windows x64 | `can-audio-client-${{ needs.version.outputs.number }}-win-x64.zip` | 解压后运行 `ControllerClient.exe`，保留整个目录 |
+            | macOS 14+（Apple 芯片 / Intel 通用） | `can-audio-client-${{ needs.version.outputs.number }}-macos-universal.zip` | 解压后把 `CAN Audio.app` 拖进「应用程序」；未经公证，首次打开见 README |
+            | Linux x64 | `can-audio-client-${{ needs.version.outputs.number }}-linux-x64.tar.gz` | 解压后运行 `ControllerClient`，`./install.sh` 加菜单入口 |
+            | Arch Linux | `PKGBUILD` + `can-audio-client.install` | 放进同一目录后 `makepkg -si` |
+
+            macOS 要在「隐私与安全性」里允许输入监控和麦克风；Linux 的全局 PTT 要求用户在 `input` 组。
 
             校验：`SHA256SUMS` 里是压缩包的 SHA-256。
 

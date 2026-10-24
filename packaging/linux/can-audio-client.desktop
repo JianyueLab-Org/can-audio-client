@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CAN Audio
+Comment=CAN 管制语音客户端
+Exec=can-audio-client
+Icon=can-audio-client
+Terminal=false
+Categories=Network;Audio;
+StartupWMClass=ControllerClient

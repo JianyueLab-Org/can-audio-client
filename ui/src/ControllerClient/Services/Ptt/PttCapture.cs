@@ -10,15 +10,15 @@ public sealed class PttCapture : IDisposable
     // 录制开始时就按着的摇杆按钮不算数（用户可能一直压着油门上的某个开关），只在轮询线程上访问
     private readonly Dictionary<int, HashSet<int>> _held = [];
     private int _done;
-    private LowLevelHook? _keyboard, _mouse;
+    private IDisposable? _keyboard, _mouse;
     private IDisposable? _joystick;
 
     public PttCapture(Action<PttBinding> onCaptured) => _onCaptured = onCaptured;
 
     public void Start()
     {
-        _keyboard = LowLevelHook.Keyboard((pressed, key) => { if (pressed) Fire(PttBinding.Keyboard(key)); });
-        _mouse = LowLevelHook.Mouse((pressed, button) => { if (pressed) Fire(PttBinding.Mouse(button)); });
+        _keyboard = InputHooks.Keyboard((pressed, key) => { if (pressed) Fire(PttBinding.Keyboard(key)); });
+        _mouse = InputHooks.Mouse((pressed, button) => { if (pressed) Fire(PttBinding.Mouse(button)); });
         _joystick = Joysticks.Subscribe(() => null, OnJoysticks);
     }
 

@@ -15,7 +15,7 @@ public sealed class PttWatcher : IDisposable
     };
     private List<PttBinding> _bindings;
     private bool _state;
-    private LowLevelHook? _keyboard, _mouse;
+    private IDisposable? _keyboard, _mouse;
     private IDisposable? _joystick;
 
     public PttWatcher(IEnumerable<PttBinding> bindings, Action<bool> onChange)
@@ -115,13 +115,13 @@ public sealed class PttWatcher : IDisposable
         lock (_gate) kinds = [.. _bindings.Select(b => b.Kind)];
         StopSources(!kinds.Contains(PttKind.Keyboard), !kinds.Contains(PttKind.Mouse), !kinds.Contains(PttKind.Joystick));
         if (kinds.Contains(PttKind.Keyboard))
-            _keyboard ??= LowLevelHook.Keyboard((pressed, key) =>
+            _keyboard ??= InputHooks.Keyboard((pressed, key) =>
             {
                 if (pressed) Press(PttKind.Keyboard, key);
                 else Release(PttKind.Keyboard, key);
             });
         if (kinds.Contains(PttKind.Mouse))
-            _mouse ??= LowLevelHook.Mouse((pressed, button) =>
+            _mouse ??= InputHooks.Mouse((pressed, button) =>
             {
                 if (pressed) Press(PttKind.Mouse, button);
                 else Release(PttKind.Mouse, button);
