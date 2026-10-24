@@ -1,8 +1,0 @@
-post_install() {
-    echo '>>> 全局 PTT 直接读取 /dev/input，需要把用户加入 input 组：'
-    echo '>>>   sudo usermod -aG input "$USER"   然后重新登录'
-}
-
-post_upgrade() {
-    post_install
-}

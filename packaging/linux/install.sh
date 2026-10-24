@@ -1,6 +1,5 @@
 #!/bin/sh
 # 给当前用户装桌面菜单入口，程序留在本目录不动（移动目录后重新运行一次）。
-# Arch 用户也可以用发布页的 PKGBUILD 装到 /opt。
 set -eu
 dir=$(cd "$(dirname "$0")" && pwd)
 data=${XDG_DATA_HOME:-$HOME/.local/share}
