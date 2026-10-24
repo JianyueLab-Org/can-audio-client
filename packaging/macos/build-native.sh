@@ -29,7 +29,8 @@ build "$work/opus" -DBUILD_SHARED_LIBS=ON -DOPUS_BUILD_PROGRAMS=OFF -DOPUS_BUILD
 
 fetch portaudio https://github.com/PortAudio/portaudio/archive/refs/tags/v19.7.0.tar.gz \
       5af29ba58bbdbb7bbcefaaecc77ec8fc413f0db6f4c4e286c40c3e1b83174fa0
-build "$work/portaudio" -DPA_BUILD_SHARED=ON -DPA_BUILD_STATIC=OFF
+# 19.7.0 写的是 CMAKE_MINIMUM_REQUIRED(2.8)，CMake 4 起拒绝配置 3.5 以下的工程，按 CMake 的提示抬到 3.5
+build "$work/portaudio" -DPA_BUILD_SHARED=ON -DPA_BUILD_STATIC=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 # PyAudio 链 -lportaudio；只留动态库，免得链到静态库还得补一串 CoreAudio 框架参数
 rm -f "$prefix"/lib/libportaudio*.a
 ls -l "$prefix/lib"

@@ -25,8 +25,11 @@ public sealed class VoiceBridge : IAsyncDisposable
     public static string EngineName { get; } = OperatingSystem.IsWindows() ? "can-voice.exe" : "can-voice";
     /// <summary>发行包目录（含 controller/can-voice），从源码跑时是本仓库根目录。</summary>
     public static string Root { get; } = FindRoot();
-    /// <summary>can-audio 检出目录；没有时为 null。</summary>
-    public static string? VoiceRepo { get; } = FindVoiceRepo();
+    /// <summary>
+    /// can-audio 检出目录；没有时为 null。每次启动引擎时重新读 CAN_AUDIO_DIR：做成静态初始化的话，
+    /// JIT 可以在用到这个类型的方法一进入时就初始化它，比调用方设置环境变量还早。
+    /// </summary>
+    public static string? VoiceRepo => FindVoiceRepo();
 
     private static IEnumerable<DirectoryInfo> Ancestors()
     {
@@ -73,11 +76,12 @@ public sealed class VoiceBridge : IAsyncDisposable
         var configured = Environment.GetEnvironmentVariable("CAN_PYTHON");
         var bundled = Path.Combine(Root, "controller", EngineName);
         var useBundled = configured is null && File.Exists(bundled);
-        var bridge = VoiceRepo is null ? null : Path.Combine(VoiceRepo, "controller", "bridge.py");
+        var repo = VoiceRepo;
+        var bridge = repo is null ? null : Path.Combine(repo, "controller", "bridge.py");
         if (!useBundled && (bridge is null || !File.Exists(bridge)))
             throw new FileNotFoundException($"找不到语音引擎：发行包缺少 controller/{EngineName}；从源码运行请先执行 sync-voice 脚本拉取 can-audio，或设置 CAN_AUDIO_DIR。");
         var venvPython = OperatingSystem.IsWindows() ? Path.Combine(".venv", "Scripts", "python.exe") : Path.Combine(".venv", "bin", "python");
-        var python = configured ?? new[] { VoiceRepo, Root }.Where(dir => dir is not null)
+        var python = configured ?? new[] { repo, Root }.Where(dir => dir is not null)
             .Select(dir => Path.Combine(dir!, venvPython)).FirstOrDefault(File.Exists)
             ?? (OperatingSystem.IsWindows() ? "python" : "python3");
         var info = new ProcessStartInfo(useBundled ? bundled : python)
