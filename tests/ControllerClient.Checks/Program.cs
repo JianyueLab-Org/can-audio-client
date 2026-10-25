@@ -18,6 +18,29 @@ static void Check(bool condition, string message)
 
 static JsonElement Binding(object data) => JsonSerializer.SerializeToElement(data);
 
+var debugDirectory = Path.Combine(Path.GetTempPath(), "can-debug-checks-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(debugDirectory);
+try
+{
+    var debugPath = Path.Combine(debugDirectory, DebugOptions.FileName);
+    Check(!DebugOptions.LoadShowServerEndpoints(debugPath), "调试文件缺失时必须隐藏手动端点");
+    foreach (var json in new[] { "{}", "null", "[]", "{", "{\"show_server_endpoints\":false}", "{\"show_server_endpoints\":\"true\"}", "{\"show_server_endpoints\":1}" })
+    {
+        File.WriteAllText(debugPath, json);
+        Check(!DebugOptions.LoadShowServerEndpoints(debugPath), "无效配置或非布尔 true 不能开启手动端点");
+    }
+    File.WriteAllText(debugPath, "{\"show_server_endpoints\":true}");
+    Check(DebugOptions.LoadShowServerEndpoints(debugPath), "独立配置明确为 true 时应显示手动端点");
+    var serverSettings = new SettingsViewModel();
+    Check(serverSettings.Servers.Contains(serverSettings.SelectedServer), "默认服务器必须在服务器选择列表中");
+    if (!serverSettings.ShowServerEndpoints)
+        Check(serverSettings.ServerHost == SettingsViewModel.DefaultServerHost
+              && serverSettings.ServerPort == SettingsViewModel.DefaultServerPort,
+              "未开启调试时必须使用 CAN 端点，不加载已保存的自定义地址");
+}
+finally { Directory.Delete(debugDirectory, recursive: true); }
+Console.WriteLine("PASS: 独立调试配置默认关闭、严格布尔开关、无效文件及服务器选择检查");
+
 var settings = new SettingsViewModel { PttBindings = [] };
 settings.MarkSaved();
 var keyboard = Binding(new { kind = "keyboard", key = "v" });

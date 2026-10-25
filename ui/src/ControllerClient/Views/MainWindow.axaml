@@ -44,8 +44,8 @@
                       Content="{Binding ConnectButtonText}" IsEnabled="{Binding !IsConnecting}" Click="OnConnectClick" />
               <Button Width="80" Content="设置" Click="OnSettingsClick" />
               <Button Classes="icon" Content="{Binding OnTopButtonText}" ToolTip.Tip="置顶小窗" Command="{Binding ToggleTopmostCommand}" />
-              <Button Classes="icon" Content="—" FontSize="10" ToolTip.Tip="最小化" Click="OnMinimizeClick" />
-              <Button Classes="icon danger" Content="✕" ToolTip.Tip="退出" Click="OnExitClick" />
+              <Button Classes="icon" ToolTip.Tip="最小化" Click="OnMinimizeClick"><PathIcon Classes="minimize" /></Button>
+              <Button Classes="icon danger" ToolTip.Tip="退出" Click="OnExitClick"><PathIcon Classes="close" /></Button>
               <TextBlock Classes="callsign" Margin="8,0,0,0" Text="{Binding CallsignText}" VerticalAlignment="Center" />
             </StackPanel>
             <TextBlock Grid.Column="2" Classes="caption mono" Text="{Binding VersionText}" VerticalAlignment="Center" />
@@ -120,8 +120,8 @@
             <Button Classes="icon" Content="{Binding MiniVccsButtonText}" ToolTip.Tip="显示 / 隐藏频率面板"
                     IsVisible="{Binding IsConnected}" Command="{Binding ToggleMiniVccsCommand}" />
             <Button Classes="icon" Content="{Binding OnTopButtonText}" ToolTip.Tip="退出置顶小窗" Command="{Binding ToggleTopmostCommand}" />
-            <Button Classes="icon" Content="—" FontSize="10" ToolTip.Tip="最小化" Click="OnMinimizeClick" />
-            <Button Classes="icon danger" Content="✕" ToolTip.Tip="退出" Click="OnExitClick" />
+            <Button Classes="icon" ToolTip.Tip="最小化" Click="OnMinimizeClick"><PathIcon Classes="minimize" /></Button>
+            <Button Classes="icon danger" ToolTip.Tip="退出" Click="OnExitClick"><PathIcon Classes="close" /></Button>
           </StackPanel>
 
           <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsConnected}">
@@ -187,10 +187,10 @@
                           <ToggleButton Classes="chan rx" Content="RX" IsChecked="{Binding IsRx}" ToolTip.Tip="接收" />
                           <ToggleButton Classes="chan xc" Content="XC" IsChecked="{Binding IsCrossCoupled}" IsEnabled="{Binding CanTransmit}" ToolTip.Tip="交叉耦合" />
                         </StackPanel>
-                        <Button Grid.Column="3" Classes="del" Content="✕" ToolTip.Tip="移除"
+                        <Button Grid.Column="3" Classes="del" ToolTip.Tip="移除"
                                 IsVisible="{Binding CanRemove}"
                                 Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveStationCommand}"
-                                CommandParameter="{Binding}" />
+                                CommandParameter="{Binding}"><PathIcon Classes="close small" /></Button>
                       </Grid>
                     </Border>
                   </DataTemplate>
@@ -205,8 +205,8 @@
                   <TextBlock Classes="caption" Text="呼号" VerticalAlignment="Center" Margin="0,0,2,0" />
                   <TextBox Classes="mono" Width="110" Text="{Binding NewStationText}" PlaceholderText="ZBAA_APP"
                            GotFocus="OnNewStationGotFocus" KeyDown="OnNewStationKeyDown" />
-                  <Button Classes="mini" Content="✓" ToolTip.Tip="添加" Command="{Binding AddStationCommand}" />
-                  <Button Classes="mini" Content="✕" ToolTip.Tip="取消" Command="{Binding CancelAddStationCommand}" />
+                  <Button Classes="mini" ToolTip.Tip="添加" Command="{Binding AddStationCommand}"><PathIcon Classes="check" /></Button>
+                  <Button Classes="mini" ToolTip.Tip="取消" Command="{Binding CancelAddStationCommand}"><PathIcon Classes="close" /></Button>
                 </StackPanel>
               </StackPanel>
             </StackPanel>

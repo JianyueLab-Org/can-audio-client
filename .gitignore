@@ -6,6 +6,7 @@ build/
 dist/
 buildinfo.json
 radio_settings.json
+can-pilot.debug.json
 logs/
 *.log
 # Python 语音引擎在 JianyueLab-Org/can-audio（new-client-sys），由 sync-voice.ps1 / CI 检出到这里

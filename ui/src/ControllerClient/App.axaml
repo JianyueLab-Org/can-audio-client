@@ -1,6 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="ControllerClient.App"
+             Name="CAN Audio"
              RequestedThemeVariant="Dark">
 
   <!--
@@ -11,6 +12,9 @@
       Styles/Theme/Controls.axaml      其余控件的尺寸与状态样式；
       Styles/App.axaml                 业务界面样式。
   -->
+  <NativeMenu.Menu>
+    <NativeMenu />
+  </NativeMenu.Menu>
   <Application.Styles>
     <SimpleTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Simple.xaml" />

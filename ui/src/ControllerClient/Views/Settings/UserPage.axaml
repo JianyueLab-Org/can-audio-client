@@ -10,9 +10,13 @@
     <TextBlock Classes="label" Text="密码" />
     <TextBox Text="{Binding Password}" PasswordChar="●" />
     <TextBlock Classes="label" Text="语音服务器" />
-    <TextBox Text="{Binding ServerHost}" />
-    <TextBlock Classes="label" Text="端口" />
-    <NumericUpDown Value="{Binding ServerPort}" Minimum="1" Maximum="65535" />
+    <ComboBox ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer, Mode=OneWay}" HorizontalAlignment="Stretch" />
+    <StackPanel IsVisible="{Binding ShowServerEndpoints}">
+      <TextBlock Classes="label" Text="域名（开发调试）" />
+      <TextBox Text="{Binding ServerHost}" />
+      <TextBlock Classes="label" Text="端口" />
+      <NumericUpDown Value="{Binding ServerPort}" Minimum="1" Maximum="65535" />
+    </StackPanel>
     <TextBlock Classes="caption" Text="{Binding StatusText}" TextWrapping="Wrap" />
   </StackPanel>
 </UserControl>

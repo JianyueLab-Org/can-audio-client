@@ -29,8 +29,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>开始（true）或取消（false）录制一条 PTT 绑定。</summary>
     public Func<bool, Task>? CapturePtt { get; set; }
     public Action? Apply { get; set; }
-    [ObservableProperty] private string _serverHost = "audio.ceruleanavi.net";
-    [ObservableProperty] private int _serverPort = 64738;
+    public const string DefaultServerHost = "audio.ceruleanavi.net";
+    public const int DefaultServerPort = 64738;
+    public bool ShowServerEndpoints { get; } = DebugOptions.ShowServerEndpoints;
+    public string[] Servers { get; } = ["CAN"];
+    public string SelectedServer => "CAN";
+    [ObservableProperty] private string _serverHost = DefaultServerHost;
+    [ObservableProperty] private int _serverPort = DefaultServerPort;
     [ObservableProperty] private string _statusText = "";
     public SettingsViewModel()
     {
@@ -185,8 +190,10 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     // —— UniATIS 集成（AFV groupBox5） ——
     [ObservableProperty] private bool _enableUniAtis;
-    [ObservableProperty] private string _atisTextPath = @"C:\UniATIS\ATIS.TXT";
-    [ObservableProperty] private string _atisSoundPath = @"C:\UniATIS\Sounds";
+    private static string UniAtisRoot => OperatingSystem.IsWindows() ? @"C:\UniATIS" :
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "UniATIS");
+    [ObservableProperty] private string _atisTextPath = Path.Combine(UniAtisRoot, "ATIS.TXT");
+    [ObservableProperty] private string _atisSoundPath = Path.Combine(UniAtisRoot, "Sounds");
 
     // —— Stream Deck（AFV groupBox6） ——
     [ObservableProperty] private bool _enableStreamDeck;

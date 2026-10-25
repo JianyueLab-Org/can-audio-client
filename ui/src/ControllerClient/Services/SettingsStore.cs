@@ -16,9 +16,12 @@ public static class SettingsStore
         {
             var json = JsonNode.Parse(File.ReadAllText(path))!;
             model.NetworkId = (string?)json["last_username"] ?? "";
-            model.ServerHost = (string?)json["mumble_host"] ?? "audio.ceruleanavi.net";
-            if (model.ServerHost is "hjdczy.top" or "audio.airwaysn.org") model.ServerHost = "audio.ceruleanavi.net";
-            model.ServerPort = (int?)json["mumble_port"] ?? 64738;
+            if (model.ShowServerEndpoints)
+            {
+                model.ServerHost = (string?)json["mumble_host"] ?? SettingsViewModel.DefaultServerHost;
+                if (model.ServerHost is "hjdczy.top" or "audio.airwaysn.org") model.ServerHost = SettingsViewModel.DefaultServerHost;
+                model.ServerPort = (int?)json["mumble_port"] ?? SettingsViewModel.DefaultServerPort;
+            }
             model.OutputVolume = 20 * Math.Log10(Math.Max(1, (double?)json["speaker_volume"] ?? 100) / 100);
             model.InputDeviceName = (string?)json["input_name"] ?? "系统默认";
             model.HeadsetDeviceName = (string?)json["output_name"] ?? "系统默认";

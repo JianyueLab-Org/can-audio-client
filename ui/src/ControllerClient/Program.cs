@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Media;
 using ControllerClient.Services;
 
 namespace ControllerClient;
@@ -19,5 +20,23 @@ internal static class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            .With(new X11PlatformOptions { WmClass = "can-controller-client", EnableSessionManagement = false })
+            .With(new FontManagerOptions { FontFallbacks = FontFallbacks })
             .LogToTrace();
+
+    private static readonly FontFallback[] FontFallbacks =
+    [
+        new() { FontFamily = new FontFamily("Microsoft YaHei UI") },
+        new() { FontFamily = new FontFamily("PingFang SC") },
+        new() { FontFamily = new FontFamily("Hiragino Sans GB") },
+        new() { FontFamily = new FontFamily("Noto Sans CJK SC") },
+        new() { FontFamily = new FontFamily("Noto Sans SC") },
+        new() { FontFamily = new FontFamily("Source Han Sans SC") },
+        new() { FontFamily = new FontFamily("WenQuanYi Micro Hei") },
+        new() { FontFamily = new FontFamily("Segoe UI Symbol") },
+        new() { FontFamily = new FontFamily("Apple Symbols") },
+        new() { FontFamily = new FontFamily("DejaVu Sans") },
+        new() { FontFamily = new FontFamily("Noto Sans Symbols 2") },
+        new() { FontFamily = new FontFamily("Noto Sans Symbols") },
+    ];
 }
