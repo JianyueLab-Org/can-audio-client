@@ -46,13 +46,14 @@ can-audio-client-<版本>-win-x64/
 tar -xzf can-audio-client-<版本>-linux-x64.tar.gz
 cd can-audio-client-<版本>-linux-x64
 ./ControllerClient        # 直接运行
-./install.sh              # 可选：给当前用户加菜单入口（程序留在原目录）
 ```
 
-安装和卸载均使用当前用户运行，无需 `sudo`。安装后移动程序目录，需要重新运行 `./install.sh`。
+手动安装：将整个解压目录放到自己选择的位置，保留目录结构，运行 `./ControllerClient`。
+如需应用菜单入口，可手动编辑随包的 `can-audio-client.desktop`，将 `Exec` 改为程序绝对路径、
+`Icon` 改为随包 PNG 的绝对路径，再复制到 `~/.local/share/applications/`。
 
-卸载：先关闭客户端，在解压目录运行 `./uninstall.sh`，删除菜单入口和图标，再删除解压目录即可。
-脚本保留用户设置和日志；如需一并清理，可删除「状态、设置与日志」中列出的对应目录。
+手动卸载：关闭客户端后删除本客户端的解压目录，以及自己添加的菜单入口即可。
+用户设置和日志可按需删除，路径见「状态、设置与日志」。与其他客户端共用父目录时，只删除本客户端目录。
 
 - **全局 PTT 需要 `input` 组**：程序直接读 `/dev/input`，X11 和 Wayland 下都能在任何窗口响应，且不拦截按键。
   执行 `sudo usermod -aG input "$USER"` 后重新登录。不在 `input` 组时键盘 PTT 退回 X11 轮询（Wayland 下只在
