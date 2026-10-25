@@ -382,7 +382,7 @@ jobs:
             |---|---|---|
             | Windows x64 | `can-audio-client-${{ needs.version.outputs.number }}-win-x64.zip` | 解压后运行 `ControllerClient.exe`，保留整个目录 |
             | macOS 14+（Apple 芯片，ARM64） | `can-audio-client-${{ needs.version.outputs.number }}-macos-arm64.zip` | 解压后把 `CAN Audio.app` 拖进「应用程序」；未经公证，首次打开见 README |
-            | Linux x64 | `can-audio-client-${{ needs.version.outputs.number }}-linux-x64.tar.gz` | 解压后运行 `ControllerClient`，`./install.sh` 加菜单入口 |
+            | Linux x64 | `can-audio-client-${{ needs.version.outputs.number }}-linux-x64.tar.gz` | 手动解压到所选目录后运行 `ControllerClient`，保留整个目录 |
 
             macOS 要在「隐私与安全性」里允许输入监控和麦克风；Linux 的全局 PTT 要求用户在 `input` 组。
 

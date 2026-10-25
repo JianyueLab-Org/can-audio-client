@@ -1,6 +1,6 @@
 # CAN Audio Client
 
-CAN 管制语音客户端正式版，使用 C# / .NET 10 / Avalonia 12.1。UI 来自 [can-client-ui](https://github.com/JianyueLab-Org/can-client-ui) 的管制员界面（提交 `ee728d7e775cb692c3d5f6dbf5fd14dd7e9acd0f`）。PTT 全局输入（键盘、鼠标侧键、摇杆）、电台栈规则、席位数据和设置均在 C# 中实现；仅 Mumble 连接与音频收发由无界面的 Python 语音引擎处理。
+CAN 管制语音客户端正式版，使用 C# / .NET 10 / Avalonia 12.1。UI 来自 [can-client-ui](https://github.com/JianyueLab-Org/can-client-ui) 的管制员界面（提交 `7039d3fbfbbbe1d86f937e30ad43bb2335e339c9`，含 Linux / macOS 适配）。PTT 全局输入（键盘、鼠标侧键、摇杆）、电台栈规则、席位数据和设置均在 C# 中实现；仅 Mumble 连接与音频收发由无界面的 Python 语音引擎处理。
 
 **本仓库只有 C# 代码。** Python 语音引擎只在 [JianyueLab-Org/can-audio](https://github.com/JianyueLab-Org/can-audio/tree/new-client-sys) 的 `new-client-sys` 分支维护（`controller/`，协议见那里的 [controller/README.md](https://github.com/JianyueLab-Org/can-audio/blob/new-client-sys/controller/README.md)）；CI 每次都取该分支的最新提交编进发行包。
 
@@ -46,8 +46,14 @@ can-audio-client-<版本>-win-x64/
 tar -xzf can-audio-client-<版本>-linux-x64.tar.gz
 cd can-audio-client-<版本>-linux-x64
 ./ControllerClient        # 直接运行
-./install.sh              # 可选：给当前用户加菜单入口（程序留在原目录）
 ```
+
+手动安装：将整个解压目录放到自己选择的位置，保留目录结构，运行 `./ControllerClient`。
+如需应用菜单入口，可手动编辑随包的 `can-audio-client.desktop`，将 `Exec` 改为程序绝对路径、
+`Icon` 改为随包 PNG 的绝对路径，再复制到 `~/.local/share/applications/`。
+
+手动卸载：关闭客户端后删除本客户端的解压目录，以及自己添加的菜单入口即可。
+用户设置和日志可按需删除，路径见「状态、设置与日志」。与其他客户端共用父目录时，只删除本客户端目录。
 
 - **全局 PTT 需要 `input` 组**：程序直接读 `/dev/input`，X11 和 Wayland 下都能在任何窗口响应，且不拦截按键。
   执行 `sudo usermod -aG input "$USER"` 后重新登录。不在 `input` 组时键盘 PTT 退回 X11 轮询（Wayland 下只在
@@ -56,10 +62,19 @@ cd can-audio-client-<版本>-linux-x64
   `libicu*`、`libfontconfig1`、`libx11-6`、`libice6`、`libsm6`、`libasound2`）。中文字体建议装 Noto Sans CJK。
   音频走系统的 ALSA，PipeWire / PulseAudio 下需要对应的 ALSA 插件（Arch：`pipewire-alsa` 或 `pulseaudio-alsa`）。
 - 摇杆用随包的 SDL2；需要访问 `/dev/input/js*`、`event*`，与上面的 `input` 组是同一个条件。
+- niri 下通过 XWayland / xwayland-satellite 运行，窗口的 WM_CLASS 为 `can-controller-client`。
+  可将 [`contrib/niri/can-audio-client.kdl`](contrib/niri/can-audio-client.kdl) 中的规则复制到
+  `~/.config/niri/config.kdl`，让主窗口和设置窗口默认浮动；niri 25.11+ 也可以用 `include` 引入该文件。
+
+### 跨平台界面
+
+- Linux / macOS 沿用上游新版管制员 UI：中文和符号字体按系统回退，最小化、关闭、添加和移除按钮使用矢量图标。
+- macOS 菜单栏使用应用名 `CAN Audio`，不显示默认的「About Avalonia」。
+- Linux 固定 WM_CLASS，并关闭 X11 会话管理；UniATIS 默认路径为 `~/UniATIS`（Windows 为 `C:\UniATIS`）。
 
 ## 使用
 
-1. 在「设置 → 用户信息」填写 CAN ID、密码、语音服务器和端口（默认 `audio.ceruleanavi.net:64738`）。
+1. 在「设置 → 用户信息」填写 CAN ID、密码并选择 CAN 服务器。
 2. 在音频页选择麦克风和输出设备。
 3. PTT 默认 V。点击「添加 PTT 按键或按钮」可添加多个键盘、鼠标侧键、摇杆按钮，支持去重、逐条删除、清空；点击「应用」或「确定」保存。任意一个按住即可发话，所有绑定松开后停止。
 4. 点击连接。本人在 CAN 数据源中正在管制的频率自动加入并开启 TX；未上席位或数据源更新失败时仅收听。
@@ -94,6 +109,24 @@ can-audio 检出、`CAN_PYTHON` 指定解释器。发行包则直接用 `control
 或 pygame；摇杆通过 C# 直接调用随包的 SDL2，设备和按钮序号与旧版一致。
 
 ## 验证与编译
+
+### 开发调试：手动服务器地址
+
+默认仅显示服务器选择，隐藏域名和端口输入框，并使用所选服务器的端点。
+需要调试自定义端点时，在 `ControllerClient` 可执行文件旁手动创建独立文件 `can-pilot.debug.json`：
+
+```json
+{
+  "show_server_endpoints": true
+}
+```
+
+重启客户端后，设置页会显示域名和端口输入框。该开关不写入用户设置，也不随发行包分发；
+删除文件或改为 `false` 后重启，即恢复服务器选择对应的端点，不再使用已保存的自定义地址。
+从源码运行时文件放在编译输出目录（如 `ui/src/ControllerClient/bin/Release/net10.0/`）；
+macOS `.app` 包内放在 `Contents/MacOS/arm64/`。
+
+### 检查与打包
 
 ```powershell
 dotnet run --project tests/ControllerClient.Checks -c Release

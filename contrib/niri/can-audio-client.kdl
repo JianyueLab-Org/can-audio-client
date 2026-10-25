@@ -1,0 +1,11 @@
+// CAN Audio 的 niri 窗口规则：主窗口及设置窗口默认浮动。
+// 在 ~/.config/niri/config.kdl 顶层加入（niri 25.11+）：
+//   include "/path/to/can-audio-client/contrib/niri/can-audio-client.kdl"
+// 也可以直接复制下面的 window-rule。
+// Avalonia 经 XWayland / xwayland-satellite 运行，app-id 来自 WM_CLASS。
+// 来源：can-client-ui 7039d3fbfbbbe1d86f937e30ad43bb2335e339c9 的 contrib/niri/can-client.kdl。
+window-rule {
+    match app-id=r#"^can-controller-client$"#
+
+    open-floating true
+}

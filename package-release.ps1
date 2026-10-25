@@ -82,7 +82,7 @@ Copy-Item (Join-Path $voiceDist "can-voice$exe") (Join-Path $stage 'controller')
 Copy-Item (Join-Path $PSScriptRoot 'README.md') $stage
 if ((Test-Path -LiteralPath $rnnoise) -and (Test-Path -LiteralPath $license)) { Copy-Item $license $stage }
 if ($Runtime -like 'linux-*') {
-    Copy-Item (Join-Path $packaging 'linux/can-audio-client.desktop'), (Join-Path $packaging 'linux/install.sh') $stage
+    Copy-Item (Join-Path $packaging 'linux/can-audio-client.desktop') $stage
     $icon = Join-Path $dist 'icons/can-audio-client.png'
     & $Python (Join-Path $packaging 'icons.py') (Join-Path $PSScriptRoot 'ui/src/ControllerClient/app.ico') (Split-Path $icon)
     if ($LASTEXITCODE) { throw '生成图标失败（需要 pip install pillow）' }
@@ -94,7 +94,6 @@ if ($Runtime -like 'linux-*') {
 if (-not $windows) {
     # Copy-Item 在 Unix 上不一定保留可执行位，tar 包里的权限就是用户解压后的权限
     chmod 755 (Join-Path $stage 'ControllerClient') (Join-Path $stage 'controller/can-voice')
-    if ($Runtime -like 'linux-*') { chmod 755 (Join-Path $stage 'install.sh') }
 }
 
 # —— 验包 ——

@@ -6,4 +6,4 @@ Exec=can-audio-client
 Icon=can-audio-client
 Terminal=false
 Categories=Network;Audio;
-StartupWMClass=ControllerClient
+StartupWMClass=can-controller-client
