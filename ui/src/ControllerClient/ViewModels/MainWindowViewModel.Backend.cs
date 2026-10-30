@@ -15,8 +15,7 @@ public sealed partial class MainWindowViewModel
     private readonly NetworkDirectory _directory = new();
     private readonly DispatcherTimer _feedTimer = new() { Interval = TimeSpan.FromSeconds(15) };
     private readonly DispatcherTimer _syncTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
-    private readonly Dictionary<string, int> _inputs = [];
-    private readonly Dictionary<string, int> _outputs = [];
+    private AudioDevices _devices = new();
     private PttWatcher _ptt = null!;
     private PttCapture? _capture;
     private bool _refreshing;
@@ -70,16 +69,13 @@ public sealed partial class MainWindowViewModel
         ConfigureSettings(model);
         try
         {
-            var devices = await _bridge.SendAsync("devices");
-            _inputs.Clear(); _outputs.Clear();
-            foreach (var device in devices.EnumerateArray())
-            {
-                var name = device.GetProperty("name").GetString()!;
-                var index = device.GetProperty("index").GetInt32();
-                var label = name;
-                if (device.GetProperty("input").GetBoolean()) { _inputs[label] = index; model.InputDevices.Add(label); }
-                if (device.GetProperty("output").GetBoolean()) { _outputs[label] = index; model.OutputDevices.Add(label); model.SpeakerDevices.Add(label); }
-            }
+            _devices = AudioDevices.Parse(await _bridge.SendAsync("devices"));
+            foreach (var name in _devices.InputNames) model.InputDevices.Add(name);
+            foreach (var name in _devices.OutputNames) { model.OutputDevices.Add(name); model.SpeakerDevices.Add(name); }
+            // 旧版本存的完整名字对上的是截断后的 MME 名字，下拉框里要选中后者，否则显示成空白
+            model.InputDeviceName = _devices.InputName(model.InputDeviceName) ?? model.InputDeviceName;
+            model.HeadsetDeviceName = _devices.OutputName(model.HeadsetDeviceName) ?? model.HeadsetDeviceName;
+            model.SpeakerDeviceName = _devices.OutputName(model.SpeakerDeviceName) ?? model.SpeakerDeviceName;
         }
         catch (Exception ex) { model.StatusText = ex.Message; }
         model.MarkSaved();
@@ -96,8 +92,6 @@ public sealed partial class MainWindowViewModel
         await RefreshFeedAsync();
     }
 
-    private int? Device(Dictionary<string, int> devices, string? name) => name is not null && devices.TryGetValue(name, out var index) ? index : null;
-
     private async Task ConnectBackendAsync()
     {
         if (IsConnecting || IsConnected) return;
@@ -110,18 +104,13 @@ public sealed partial class MainWindowViewModel
         try
         {
             // 每次连接重新枚举，避免保存过设备但未打开设置时退回系统默认。
-            var devices = await _bridge.SendAsync("devices");
-            _inputs.Clear(); _outputs.Clear();
-            foreach (var device in devices.EnumerateArray())
-            {
-                var name = device.GetProperty("name").GetString()!;
-                var index = device.GetProperty("index").GetInt32();
-                if (device.GetProperty("input").GetBoolean()) _inputs[name] = index;
-                if (device.GetProperty("output").GetBoolean()) _outputs[name] = index;
-            }
+            _devices = AudioDevices.Parse(await _bridge.SendAsync("devices"));
+            var input = _devices.Input(Settings.InputDeviceName);
+            var output = _devices.Output(Settings.HeadsetDeviceName);
+            AppLog.Info($"音频设备：输入 {Settings.InputDeviceName} → {input?.ToString() ?? "默认"}，"
+                        + $"输出 {Settings.HeadsetDeviceName} → {output?.ToString() ?? "默认"}");
             var result = await _bridge.SendAsync("connect", new { host = Settings.ServerHost, port = Settings.ServerPort,
-                cid = _sessionCid, password = Settings.Password,
-                input = Device(_inputs, Settings.InputDeviceName), output = Device(_outputs, Settings.HeadsetDeviceName) });
+                cid = _sessionCid, password = Settings.Password, input, output });
             if (result.ValueKind != JsonValueKind.True) throw new IOException(StatusText);
             IsConnected = true;
             IsExpanded = true;
@@ -141,8 +130,8 @@ public sealed partial class MainWindowViewModel
         if (!IsConnected) return;
         await ExecuteAsync("audio", new { mic = Math.Min(200, 100 * Math.Pow(10, Settings.InputVolume / 20)),
             speaker = Math.Min(200, 100 * Math.Pow(10, Settings.OutputVolume / 20)), denoise = !Settings.DisableAudioEffects,
-            input = Device(_inputs, Settings.InputDeviceName),
-            output = Device(_outputs, IsSpeakerOutput ? Settings.SpeakerDeviceName : Settings.HeadsetDeviceName) });
+            input = _devices.Input(Settings.InputDeviceName),
+            output = _devices.Output(IsSpeakerOutput ? Settings.SpeakerDeviceName : Settings.HeadsetDeviceName) });
     }
 
     partial void OnIsSpeakerOutputChanged(bool value) => _ = ApplyAudioAsync();
