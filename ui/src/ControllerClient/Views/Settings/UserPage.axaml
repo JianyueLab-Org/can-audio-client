@@ -4,19 +4,24 @@
              x:Class="ControllerClient.Views.Settings.UserPage"
              x:DataType="vm:SettingsViewModel">
   <!-- AFV User Details -->
-  <StackPanel Width="200" HorizontalAlignment="Left">
+  <StackPanel Width="260" HorizontalAlignment="Left">
     <TextBlock Classes="label" Text="CID" />
     <TextBox Classes="mono" Text="{Binding NetworkId}" />
     <TextBlock Classes="label" Text="密码" />
     <TextBox Text="{Binding Password}" PasswordChar="●" />
     <TextBlock Classes="label" Text="语音服务器" />
-    <ComboBox ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer, Mode=OneWay}" HorizontalAlignment="Stretch" />
+    <!-- 同 Python 版 serverpicker.py：从公共服务器目录选；开了调试端点才能选“自定义”手填 -->
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Sm}">
+      <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding ServerChoices}" SelectedItem="{Binding SelectedServer}" />
+      <Button Grid.Column="1" Content="刷新" Command="{Binding RefreshServersCommand}" />
+    </Grid>
     <StackPanel IsVisible="{Binding ShowServerEndpoints}">
       <TextBlock Classes="label" Text="域名（开发调试）" />
       <TextBox Text="{Binding ServerHost}" />
       <TextBlock Classes="label" Text="端口" />
       <NumericUpDown Value="{Binding ServerPort}" Minimum="1" Maximum="65535" />
     </StackPanel>
+    <TextBlock Classes="caption" Text="{Binding ServerListText}" TextWrapping="Wrap" IsVisible="{Binding ServerListText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     <TextBlock Classes="caption" Text="{Binding StatusText}" TextWrapping="Wrap" />
   </StackPanel>
 </UserControl>

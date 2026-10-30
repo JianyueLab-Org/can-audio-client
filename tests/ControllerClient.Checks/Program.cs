@@ -32,11 +32,11 @@ try
     File.WriteAllText(debugPath, "{\"show_server_endpoints\":true}");
     Check(DebugOptions.LoadShowServerEndpoints(debugPath), "独立配置明确为 true 时应显示手动端点");
     var serverSettings = new SettingsViewModel();
-    Check(serverSettings.Servers.Contains(serverSettings.SelectedServer), "默认服务器必须在服务器选择列表中");
+    Check(serverSettings.SelectedServer is { } selected && serverSettings.ServerChoices.Contains(selected), "当前服务器必须在服务器选择列表中");
     if (!serverSettings.ShowServerEndpoints)
-        Check(serverSettings.ServerHost == SettingsViewModel.DefaultServerHost
-              && serverSettings.ServerPort == SettingsViewModel.DefaultServerPort,
-              "未开启调试时必须使用 CAN 端点，不加载已保存的自定义地址");
+        Check(SettingsViewModel.IsOfficialServer(serverSettings.ServerHost)
+              && !serverSettings.ServerChoices.Contains(SettingsViewModel.CustomServer),
+              "未开启调试时只能使用 CAN 的服务器，不加载已保存的自定义地址");
 }
 finally { Directory.Delete(debugDirectory, recursive: true); }
 Console.WriteLine("PASS: 独立调试配置默认关闭、严格布尔开关、无效文件及服务器选择检查");
@@ -78,6 +78,38 @@ Check(settings.PttBindings.Length == 3 && !settings.IsWaitingForPtt, "即时录�
 settings.ClearPttCommand.Execute(null);
 Check(settings.PttBindings.Length == 0 && !settings.CanClearPtt, "清空绑定后应允许保存空数组");
 Console.WriteLine("PASS: 多 PTT 添加、去重、JSON 恢复、单项删除、录制竞态及清空检查");
+
+// 服务器目录：照抄 can-api /api/v1/servers 的实际返回
+var directory = ServerDirectory.Parse("""
+{"data":{"audio":[{"host":"audio.ceruleanavi.net","kind":"audio","location":"Tokyo, Japan","name":"Audio","port":64738},
+{"host":"hz.cn.audio.ceruleanavi.net","kind":"audio","location":"Hangzhou, China","name":"CAN - HZ","port":64738},
+{"host":"hz.cn.audio.ceruleanavi.net","kind":"audio","name":"重复","port":64738},
+{"host":"bad host","kind":"audio","name":"坏地址","port":64738},
+{"host":"fsd.example","kind":"fsd","name":"FSD","port":6809}],
+"fsd":[{"host":"fsd.ceruleanavi.net","kind":"fsd","name":"FSD","port":6809}]},"status":200}
+""");
+Check(directory.Count == 2 && directory[1].Host == "hz.cn.audio.ceruleanavi.net", "目录应收下杭州语音服务器，并丢掉重复和坏条目");
+var picker = new SettingsViewModel { ServerHost = "audio.ceruleanavi.net", ServerPort = 64738 };
+picker.LoadServers(directory);
+// 开了调试端点时多一项“自定义”
+var customCount = picker.ShowServerEndpoints ? 1 : 0;
+Check(picker.ServerChoices.Count == 2 + customCount && picker.SelectedServer?.Server?.Name == "Audio", "加载列表后应选中当前地址对应的服务器");
+picker.SelectedServer = picker.ServerChoices.First(c => c.Server?.Location == "Hangzhou, China");
+Check(picker.ServerHost == "hz.cn.audio.ceruleanavi.net" && picker.ServerPort == 64738 && picker.IsDirty, "选杭州应填入杭州地址并允许应用");
+var offline = new SettingsViewModel { ServerHost = "hz.cn.audio.ceruleanavi.net", ServerPort = 64738 };
+offline.LoadServers([]);
+Check(offline.SelectedServer?.Server?.Host == "hz.cn.audio.ceruleanavi.net", "列表没拿到时仍应显示已选的 CAN 服务器");
+if (picker.ShowServerEndpoints)
+{
+    picker.ServerHost = "voice.intranet.example";
+    Check(picker.SelectedServer == SettingsViewModel.CustomServer, "手改地址应回到自定义");
+    picker.SelectedServer = picker.ServerChoices[1];
+    picker.SelectedServer = SettingsViewModel.CustomServer;
+    Check(picker.ServerHost == "voice.intranet.example", "切回自定义应恢复手填的地址");
+}
+else
+    Check(!picker.ServerChoices.Contains(SettingsViewModel.CustomServer), "未开调试端点时不能选自定义");
+Console.WriteLine("PASS: 服务器目录解析与杭州服务器选择");
 
 var status = new ConnectionStatusViewModel();
 status.SetVoiceState("connecting");
