@@ -16,10 +16,12 @@ public static class SettingsStore
         {
             var json = JsonNode.Parse(File.ReadAllText(path))!;
             model.NetworkId = (string?)json["last_username"] ?? "";
-            if (model.ShowServerEndpoints)
+            var host = (string?)json["mumble_host"] ?? SettingsViewModel.DefaultServerHost;
+            if (host is "hjdczy.top" or "audio.airwaysn.org") host = SettingsViewModel.DefaultServerHost;
+            // 不开调试端点时只加载 CAN 自己的服务器（例如服务器列表里选的杭州），其余一律用默认
+            if (model.ShowServerEndpoints || SettingsViewModel.IsOfficialServer(host))
             {
-                model.ServerHost = (string?)json["mumble_host"] ?? SettingsViewModel.DefaultServerHost;
-                if (model.ServerHost is "hjdczy.top" or "audio.airwaysn.org") model.ServerHost = SettingsViewModel.DefaultServerHost;
+                model.ServerHost = host;
                 model.ServerPort = (int?)json["mumble_port"] ?? SettingsViewModel.DefaultServerPort;
             }
             model.OutputVolume = 20 * Math.Log10(Math.Max(1, (double?)json["speaker_volume"] ?? 100) / 100);
