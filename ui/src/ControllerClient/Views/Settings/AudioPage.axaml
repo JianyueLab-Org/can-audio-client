@@ -25,7 +25,7 @@
     </Grid>
 
     <!-- 输入电平表（AFV LevelMeter）：中段为合适音量区间 -->
-    <Grid Margin="72,6,32,0" Height="6" IsVisible="False">
+    <Grid Margin="72,6,32,0" Height="6" IsVisible="{Binding IsCalibrating}">
       <Grid ColumnDefinitions="45*,35*,20*" ColumnSpacing="2">
         <Border CornerRadius="2" Background="{DynamicResource Brush.Bg.Hover}" />
         <Border Grid.Column="1" CornerRadius="2" Background="{DynamicResource Brush.Bg.Active}" />
@@ -38,6 +38,20 @@
                Text="音量为 dB 增益。语音引擎会自动限幅；RNNoise 库存在时可启用降噪。" />
 
     <CheckBox Margin="0,10,0,0" Content="禁用麦克风降噪" IsChecked="{Binding DisableAudioEffects}" />
+
+    <!-- 麦克风音量自动校准（Python 版 calibration.py）：先静音 1 秒测底噪，再朗读 8 秒 -->
+    <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+      <TextBlock Classes="muted" Text="{Binding BaselineText}" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Content="{Binding CalibrateButtonText}" Command="{Binding CalibrateCommand}" />
+    </Grid>
+    <Border IsVisible="{Binding IsCalibrating}" Margin="0,6,0,0" Padding="8,6" CornerRadius="2"
+            Background="{DynamicResource Brush.Bg.Control}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+      <TextBlock Text="{x:Static vm:SettingsViewModel.CalibrationPhrase}" TextWrapping="Wrap" />
+    </Border>
+    <TextBlock Classes="caption" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding CalibrationStatus}"
+               IsVisible="{Binding !CalibrationFailed}" />
+    <TextBlock Classes="caption" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding CalibrationStatus}"
+               IsVisible="{Binding CalibrationFailed}" Foreground="{DynamicResource Brush.Danger}" />
 
     <!-- 压缩：编码质量与每包音频时长，默认 100 kb/s、40 ms -->
     <TextBlock Classes="section" Text="压缩" Margin="0,16,0,4" />

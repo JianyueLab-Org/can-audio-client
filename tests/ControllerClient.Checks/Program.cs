@@ -477,3 +477,39 @@ Check(mme.Output("数字输出 (High Definition Audio Device)") == 4
       "旧版本存的完整名字能对上 MME 截到 31 个字符的名字");
 Check(mme.Output("Speakers (USB Audio)") is null, "没被截断的短名字不按前缀匹配");
 Console.WriteLine("PASS: 音频设备按名字回查 index");
+
+// 麦克风校准：基准按设备名 + 降噪状态取（同 Python baseline_db），引擎事件驱动界面状态
+var calib = new SettingsViewModel { InputDeviceName = "麦克风 (USB)", DisableAudioEffects = false };
+calib.MicCalibration = new System.Text.Json.Nodes.JsonObject
+{
+    ["麦克风 (USB)"] = new System.Text.Json.Nodes.JsonObject { ["gain_db"] = 30.0, ["denoise"] = true },
+    ["旧记录"] = new System.Text.Json.Nodes.JsonObject { ["gain_db"] = 4.5 },
+};
+Check(calib.BaselineFor("麦克风 (USB)", denoise: true) == SettingsViewModel.MaxBaselineDb, "基准应限制在 -12 ~ +20 dB");
+Check(calib.BaselineFor("麦克风 (USB)", denoise: false) is null, "降噪状态不同的记录不能用");
+Check(calib.BaselineFor("旧记录", denoise: false) == 4.5 && calib.BaselineFor("没校准过", denoise: false) is null,
+      "缺 denoise 的老记录视为不降噪时做的");
+var calibrationCalls = new List<bool>();
+calib.RunCalibration = start => { calibrationCalls.Add(start); return Task.CompletedTask; };
+calib.MarkSaved();
+await calib.CalibrateCommand.ExecuteAsync(null);
+Check(calib.IsCalibrating && calibrationCalls.SequenceEqual([true]), "点校准应让引擎开始录音");
+calib.OnCalibrationEvent(Binding(new { stage = "read", progress = 0.2, level = -30.0 }));
+Check(calib.InputLevel == 50 && calib.CalibrationStatus.Contains("朗读") && !calib.IsDirty, "朗读阶段刷新电平表，不算修改");
+calib.OnCalibrationEvent(Binding(new { stage = "done", gain_db = 7.5, reason = (string?)null, speech_dbfs = -27.5,
+    noise_dbfs = -70.0, speech_seconds = 6.0, clip_ratio = 0.0, denoise = true }));
+Check(!calib.IsCalibrating && calib.BaselineFor("麦克风 (USB)", denoise: true) == 7.5 && calib.IsDirty
+      && calib.BaselineText == "当前基准：+7.5 dB", "校准成功应记下该设备的基准并允许应用");
+await calib.CalibrateCommand.ExecuteAsync(null);
+calib.OnCalibrationEvent(Binding(new { stage = "done", gain_db = (double?)null, reason = "too_short", speech_dbfs = -60.0,
+    noise_dbfs = -70.0, speech_seconds = 0.5, clip_ratio = 0.0, denoise = true }));
+Check(calib.CalibrationFailed && calib.CalibrationStatus.Contains("语音") && calib.BaselineFor("麦克风 (USB)", true) == 7.5,
+      "校准失败应提示原因且保留原来的基准");
+await calib.CalibrateCommand.ExecuteAsync(null);
+calib.InputDeviceName = "另一个麦克风";
+Check(!calib.IsCalibrating && calibrationCalls.Last() == false && calib.BaselineText == "当前基准：未校准",
+      "换设备应取消进行中的校准并显示新设备的基准");
+calib.RunCalibration = _ => throw new IOException("未知命令或尚未连接: calibrate");
+await calib.CalibrateCommand.ExecuteAsync(null);
+Check(!calib.IsCalibrating && calib.CalibrationStatus.Contains("版本过旧"), "旧引擎不支持时应提示");
+Console.WriteLine("PASS: 麦克风校准基准、引擎事件与取消检查");

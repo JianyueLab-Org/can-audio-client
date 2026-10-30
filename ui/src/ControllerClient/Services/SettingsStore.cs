@@ -27,6 +27,8 @@ public static class SettingsStore
             model.HeadsetDeviceName = (string?)json["output_name"] ?? "系统默认";
             model.SpeakerDeviceName = (string?)json["speaker_name"] ?? "系统默认";
             model.DisableAudioEffects = !((bool?)json["mic_denoise"] ?? true);
+            // Python 版 radio_settings.json 里也是这个键，迁移过来直接能用
+            if (json["mic_calibration"] is JsonObject calibration) model.MicCalibration = (JsonObject)calibration.DeepClone();
             model.PttBindings = json["ptt_bindings"]?.Deserialize<JsonElement[]>() ??
                 [JsonSerializer.SerializeToElement(new { kind = "keyboard", key = (string?)json["ptt_key"] ?? "v" })];
         }
@@ -43,7 +45,7 @@ public static class SettingsStore
         var data = new { last_username = model.NetworkId, mumble_host = model.ServerHost, mumble_port = model.ServerPort,
             speaker_volume = 100 * Math.Pow(10, model.OutputVolume / 20), mic_denoise = !model.DisableAudioEffects,
             input_name = model.InputDeviceName, output_name = model.HeadsetDeviceName, speaker_name = model.SpeakerDeviceName,
-            ptt_bindings = model.PttBindings };
+            ptt_bindings = model.PttBindings, mic_calibration = model.MicCalibration };
         File.WriteAllText(FilePath + ".tmp", JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
         File.Move(FilePath + ".tmp", FilePath, overwrite: true);
         AppLog.Info("设置已保存");
