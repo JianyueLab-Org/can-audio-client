@@ -57,6 +57,9 @@ public sealed partial class MainWindowViewModel
             return Task.CompletedTask;
         };
         model.Apply = () => { Settings = model; ConfigureSettings(model); _ = ApplyAudioAsync(); };
+        model.RunCalibration = start => start
+            ? _bridge.SendAsync("calibrate", new { input = _devices.Input(model.InputDeviceName), denoise = !model.DisableAudioEffects })
+            : _bridge.SendAsync("calibrate_cancel");
     }
 
     public async Task<SettingsViewModel> OpenSettingsAsync()
@@ -86,6 +89,7 @@ public sealed partial class MainWindowViewModel
     public async Task CloseSettingsAsync()
     {
         StopPttCapture();
+        await Settings.CancelCalibrationAsync();
         Settings = new SettingsViewModel { Password = Settings.Password };
         ConfigureSettings(Settings);
         _settingsOpen = false;
@@ -129,7 +133,9 @@ public sealed partial class MainWindowViewModel
         _ptt.SetBindings(Settings.PttBindingModels);
         if (!_settingsOpen) _ptt.Start();
         if (!IsConnected) return;
+        // baseline 是校准出来的基准（dB），旧引擎不认识这个字段会忽略
         await ExecuteAsync("audio", new { mic = Math.Min(200, 100 * Math.Pow(10, Settings.InputVolume / 20)),
+            baseline = Settings.BaselineFor(Settings.InputDeviceName, !Settings.DisableAudioEffects) ?? 0,
             speaker = Math.Min(200, 100 * Math.Pow(10, Settings.OutputVolume / 20)), denoise = !Settings.DisableAudioEffects,
             input = _devices.Input(Settings.InputDeviceName),
             output = _devices.Output(IsSpeakerOutput ? Settings.SpeakerDeviceName : Settings.HeadsetDeviceName) });
@@ -357,6 +363,7 @@ public sealed partial class MainWindowViewModel
                 if (msg.GetProperty("active").GetBoolean()) { LastReceivedFrequency = frequency; LastReceivedCallsign = callsign; }
                 break;
             case "tx": IsTransmitting = msg.GetProperty("active").GetBoolean(); break;
+            case "calibration": Settings.OnCalibrationEvent(msg); break;
         }
     }
 
