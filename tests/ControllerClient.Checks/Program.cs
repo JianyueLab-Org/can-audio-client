@@ -448,3 +448,32 @@ Check(AppVersion.Format("1.0.3", release: false, "2", null) == "1.0.4 (Dev Build
       && AppVersion.Format("1.0.3", release: false, "2", "dev") == "v1.0.4 (Dev Build 2; build dev)", "测试包报下一个补丁号并标出 Dev Build");
 Check(AppVersion.ReleaseVersion.Split('.').Length == 3 && AppVersion.Build.Length > 0, "程序集里带着版本号和 build 号");
 Console.WriteLine($"PASS: 版本号规则（当前 {AppVersion.Full}）");
+
+// —— 音频设备：同名设备不能落到 WDM-KS 上（-9999 Unanticipated host error） ——
+// 旧引擎的样子：同一个耳机按 MME、DirectSound、WASAPI、WDM-KS 各出现一次，名字相同，MME 排在最前。
+var oldEngine = AudioDevices.Parse(JsonSerializer.SerializeToElement(new object[]
+{
+    new { index = 1, name = "麦克风 (HyperX Cloud III Wireless)", input = true, output = false },
+    new { index = 3, name = "耳机 (HyperX Cloud III Wireless)", input = false, output = true },
+    new { index = 4, name = "数字输出 (High Definition Audio Dev", input = false, output = true },
+    new { index = 8, name = "麦克风 (HyperX Cloud III Wireless)", input = true, output = false },
+    new { index = 11, name = "数字输出 (High Definition Audio Device)", input = false, output = true },
+    new { index = 18, name = "麦克风 (HyperX Cloud III Wireless)", input = true, output = false },
+    new { index = 22, name = "耳机 (HyperX Cloud III Wireless)", input = false, output = true },
+    new { index = 23, name = "麦克风 (HyperX Cloud III Wireless)", input = true, output = false },
+}));
+Check(oldEngine.Input("麦克风 (HyperX Cloud III Wireless)") == 1 && oldEngine.Output("耳机 (HyperX Cloud III Wireless)") == 3,
+      "同名设备取排在最前的 MME，不能被后面的 WDM-KS 覆盖");
+Check(oldEngine.InputNames.Count == 1 && oldEngine.OutputNames.Count == 3, "下拉框里同名设备只出现一次");
+Check(oldEngine.Input("系统默认") is null && oldEngine.Input(null) is null && oldEngine.Output("已拔掉的耳机") is null,
+      "系统默认或找不到的设备交给引擎用默认设备");
+var mme = AudioDevices.Parse(JsonSerializer.SerializeToElement(new object[]
+{
+    new { index = 4, name = "数字输出 (High Definition Audio Dev", input = false, output = true },
+    new { index = 5, name = "Speakers", input = false, output = true },
+}));
+Check(mme.Output("数字输出 (High Definition Audio Device)") == 4
+      && mme.OutputName("数字输出 (High Definition Audio Device)") == "数字输出 (High Definition Audio Dev",
+      "旧版本存的完整名字能对上 MME 截到 31 个字符的名字");
+Check(mme.Output("Speakers (USB Audio)") is null, "没被截断的短名字不按前缀匹配");
+Console.WriteLine("PASS: 音频设备按名字回查 index");
