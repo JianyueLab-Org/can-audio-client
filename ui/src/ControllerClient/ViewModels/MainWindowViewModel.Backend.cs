@@ -70,6 +70,7 @@ public sealed partial class MainWindowViewModel
         var model = new SettingsViewModel { Password = Settings.Password };
         Settings = model;
         ConfigureSettings(model);
+        _ = model.RefreshServersCommand.ExecuteAsync(null);
         try
         {
             _devices = AudioDevices.Parse(await _bridge.SendAsync("devices"));

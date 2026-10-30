@@ -33,16 +33,101 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public const string DefaultServerHost = "audio.ceruleanavi.net";
     public const int DefaultServerPort = 64738;
     public bool ShowServerEndpoints { get; } = DebugOptions.ShowServerEndpoints;
-    public string[] Servers { get; } = ["CAN"];
-    public string SelectedServer => "CAN";
     [ObservableProperty] private string _serverHost = DefaultServerHost;
     [ObservableProperty] private int _serverPort = DefaultServerPort;
     [ObservableProperty] private string _statusText = "";
+
+    // —— 语音服务器选择：同 Python 版 serverpicker.py，列表来自公共服务器目录。
+    // 开了调试端点时第一项是“自定义”，可以手填地址；否则只能在目录里的 CAN 服务器之间选 ——
+    public static readonly ServerChoice CustomServer = new("自定义", null);
+    public static readonly ServerChoice DefaultServer = new("CAN", new VoiceServer("CAN", DefaultServerHost, DefaultServerPort));
+    public ObservableCollection<ServerChoice> ServerChoices { get; } = [];
+    [ObservableProperty] private ServerChoice? _selectedServer;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RefreshServersCommand))]
+    private bool _isLoadingServers;
+    [ObservableProperty] private string _serverListText = "";
+    private (string Host, int Port) _customServer;
+    private bool _syncingServer;
+
     public SettingsViewModel()
     {
         AddPttBinding(JsonSerializer.SerializeToElement(new { kind = "keyboard", key = "v" }));
         SettingsStore.Load(this);
+        _customServer = (ServerHost, ServerPort);
+        LoadServers([]);
     }
+
+    /// <summary>不开调试端点时只认 CAN 自己的服务器（默认地址或 ceruleanavi.net 的子域名）。</summary>
+    public static bool IsOfficialServer(string host) =>
+        host == DefaultServerHost || host.EndsWith(".ceruleanavi.net", StringComparison.OrdinalIgnoreCase);
+
+    partial void OnSelectedServerChanged(ServerChoice? value)
+    {
+        if (_syncingServer || value is null) return;
+        var (host, port) = value.Server is { } server ? (server.Host, server.Port) : _customServer;
+        _syncingServer = true;
+        ServerHost = host;
+        ServerPort = port;
+        _syncingServer = false;
+    }
+
+    partial void OnServerHostChanged(string value) => ServerEdited();
+    partial void OnServerPortChanged(int value) => ServerEdited();
+
+    /// <summary>手改地址或端口就回到“自定义”，并记住手填的值。</summary>
+    private void ServerEdited()
+    {
+        if (_syncingServer || !ShowServerEndpoints) return;
+        _customServer = (ServerHost, ServerPort);
+        if (SelectedServer == CustomServer) return;
+        _syncingServer = true;
+        SelectedServer = CustomServer;
+        _syncingServer = false;
+    }
+
+    private bool CanRefreshServers() => !IsLoadingServers;
+
+    /// <summary>刷新服务器列表；不改动当前填的地址，只把下拉框对到匹配的那一项。</summary>
+    [RelayCommand(CanExecute = nameof(CanRefreshServers))]
+    private async Task RefreshServersAsync()
+    {
+        IsLoadingServers = true;
+        ServerListText = "正在获取服务器列表…";
+        var servers = await ServerDirectory.FetchAsync();
+        IsLoadingServers = false;
+        if (servers is null)
+        {
+            ServerListText = ShowServerEndpoints ? "服务器列表获取失败，可手动填写地址。" : "服务器列表获取失败。";
+            return;
+        }
+        LoadServers(servers);
+        if (servers.Count == 0) ServerListText = ShowServerEndpoints ? "服务器列表为空，可手动填写地址。" : "服务器列表为空。";
+    }
+
+    public void LoadServers(IEnumerable<VoiceServer> servers)
+    {
+        _syncingServer = true;
+        ServerChoices.Clear();
+        if (ShowServerEndpoints) ServerChoices.Add(CustomServer);
+        foreach (var server in servers)
+            if (ShowServerEndpoints || IsOfficialServer(server.Host)) ServerChoices.Add(new(server.Label, server));
+        if (!ShowServerEndpoints && !ServerChoices.Any(Matches(DefaultServerHost, DefaultServerPort)))
+            ServerChoices.Insert(0, DefaultServer);
+        var current = ServerChoices.FirstOrDefault(Matches(ServerHost, ServerPort));
+        if (current is null && !ShowServerEndpoints)
+        {
+            // 存的是目录里（还）没有的 CAN 服务器：列表没拿到或刚下线，先照样显示它
+            current = new ServerChoice(ServerHost, new VoiceServer(ServerHost, ServerHost, ServerPort));
+            ServerChoices.Add(current);
+        }
+        SelectedServer = current ?? CustomServer;
+        _syncingServer = false;
+        ServerListText = "";
+    }
+
+    private static Func<ServerChoice, bool> Matches(string host, int port) =>
+        c => c.Server is { } s && s.Host == host && s.Port == port;
     /// <summary>有未应用的修改时启用“应用”按钮（同 AFV btnApply）。</summary>
     [ObservableProperty]
     private bool _isDirty;
@@ -54,6 +139,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
             or nameof(CanClearPtt) or nameof(InputVolumeText) or nameof(OutputVolumeText)
             or nameof(CanEditPtt) or nameof(PttStatusText)
             or nameof(AudioQualityText) or nameof(PacketDurationText) or nameof(BitrateSummary)
+            or nameof(SelectedServer) or nameof(IsLoadingServers) or nameof(ServerListText)
             or nameof(InputLevel) or nameof(IsCalibrating) or nameof(CalibrateButtonText)
             or nameof(CalibrationStatus) or nameof(CalibrationFailed) or nameof(BaselineText)))
             IsDirty = true;
@@ -336,4 +422,10 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     // —— Stream Deck（AFV groupBox6） ——
     [ObservableProperty] private bool _enableStreamDeck;
+}
+
+/// <summary>服务器下拉框的一项；<see cref="Server"/> 为 null 表示“自定义”。</summary>
+public sealed record ServerChoice(string Label, VoiceServer? Server)
+{
+    public override string ToString() => Label;
 }
