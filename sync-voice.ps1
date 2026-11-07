@@ -1,10 +1,10 @@
-# 拉取 / 更新 Python 语音引擎：JianyueLab-Org/can-audio 的 new-client-sys 分支，放在本仓库的 can-audio/ 下（已 gitignore）。
+# 拉取 / 更新 Python 语音引擎：JianyueLab-Org/can-audio 的 main 分支，放在本仓库的 can-audio/ 下（已 gitignore）。
 # 语音引擎只在 can-audio 维护，本仓库不再存放任何 Python 代码；CI 每次也是拉这个分支的最新提交来打包。
 # 加 -Venv 时顺便在 can-audio/.venv 建好 Python 环境并装上依赖。Windows 必须是 3.12（PyAudio 只有到 3.12 的 wheel）；
 # macOS / Linux 上 PyAudio 从源码编，要先装 PortAudio：Arch `pacman -S portaudio opus`，
 # Debian/Ubuntu `apt install portaudio19-dev libopus0`，macOS 见 packaging/macos/build-native.sh 或 `brew install portaudio opus`。
 param(
-    [string]$Ref = 'new-client-sys',
+    [string]$Ref = 'main',
     [string]$Path = "$PSScriptRoot/can-audio",
     [switch]$Venv
 )

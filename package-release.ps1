@@ -1,6 +1,6 @@
 # 生成仅包含 C# 程序与打包语音引擎的便携包，并验一遍包能不能用。Windows、macOS、Linux 通用。
 # 需要 PowerShell 7、.NET 10 SDK，以及语音引擎的检出：先跑 `sync-voice.ps1 -Venv`，它把
-# JianyueLab-Org/can-audio 的 new-client-sys 拉到 can-audio/ 并在 can-audio/.venv 装好打包依赖。
+# JianyueLab-Org/can-audio 的 main 拉到 can-audio/ 并在 can-audio/.venv 装好打包依赖。
 #
 # 版本号：设置了环境变量 CAN_VERSION（CI 数标签算出来的）就是正式包；否则取 csproj 的 CanVersion，
 # 包名带 -dev，程序里显示 (Dev Build N)。
@@ -90,7 +90,7 @@ if ($Runtime -like 'linux-*') {
 }
 # 排查时要能知道这个包里的语音引擎是 can-audio 的哪一次提交
 [IO.File]::WriteAllText((Join-Path $stage 'controller/voice-engine.txt'),
-    "JianyueLab-Org/can-audio new-client-sys @ $voiceCommit`n", [Text.UTF8Encoding]::new($false))
+    "JianyueLab-Org/can-audio main @ $voiceCommit`n", [Text.UTF8Encoding]::new($false))
 if (-not $windows) {
     # Copy-Item 在 Unix 上不一定保留可执行位，tar 包里的权限就是用户解压后的权限
     chmod 755 (Join-Path $stage 'ControllerClient') (Join-Path $stage 'controller/can-voice')
