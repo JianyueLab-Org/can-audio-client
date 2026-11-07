@@ -2,7 +2,7 @@
 
 CAN 管制语音客户端正式版，使用 C# / .NET 10 / Avalonia 12.1。UI 来自 [can-client-ui](https://github.com/JianyueLab-Org/can-client-ui) 的管制员界面（提交 `7039d3fbfbbbe1d86f937e30ad43bb2335e339c9`，含 Linux / macOS 适配）。PTT 全局输入（键盘、鼠标侧键、摇杆）、电台栈规则、席位数据和设置均在 C# 中实现；仅 Mumble 连接与音频收发由无界面的 Python 语音引擎处理。
 
-**本仓库只有 C# 代码。** Python 语音引擎只在 [JianyueLab-Org/can-audio](https://github.com/JianyueLab-Org/can-audio/tree/new-client-sys) 的 `new-client-sys` 分支维护（`controller/`，协议见那里的 [controller/README.md](https://github.com/JianyueLab-Org/can-audio/blob/new-client-sys/controller/README.md)）；CI 每次都取该分支的最新提交编进发行包。
+**本仓库只有 C# 代码。** Python 语音引擎只在 [JianyueLab-Org/can-audio](https://github.com/JianyueLab-Org/can-audio/tree/main) 的 `main` 分支维护（`controller/`，协议见那里的 [controller/README.md](https://github.com/JianyueLab-Org/can-audio/blob/main/controller/README.md)）；CI 每次都取该分支的最新提交编进发行包。
 
 ## 下载和运行
 
@@ -104,7 +104,7 @@ dotnet build CanAudio.slnx
 pwsh -File ./run-csharp.ps1
 ```
 
-以后再跑 `sync-voice.ps1` 即可更新到 `new-client-sys` 的最新提交。也可以用环境变量 `CAN_AUDIO_DIR` 指向别处的
+以后再跑 `sync-voice.ps1` 即可更新到 `main` 的最新提交。也可以用环境变量 `CAN_AUDIO_DIR` 指向别处的
 can-audio 检出、`CAN_PYTHON` 指定解释器。发行包则直接用 `controller/can-voice.exe`（macOS / Linux 为 `controller/can-voice`）。语音引擎不依赖 Qt、pynput
 或 pygame；摇杆通过 C# 直接调用随包的 SDL2，设备和按钮序号与旧版一致。
 
@@ -166,7 +166,7 @@ macOS / Linux 执行 `packaging/build-rnnoise.sh can-audio can-audio/controller`
   补丁号由 CI 数已有的 `v3.0.*` 标签取最大加一，这个系列第一次发布是 `v3.0.0`。要发 3.1 就把 `CanVersion` 改成 `3.1.0`。
 - 程序标题栏显示版本号，日志写完整版本与 build 号（`提交数.短哈希`）。正式包报它被打成的标签；本地或从源码编译的显示
   下一个补丁号加 `(Dev Build N)`。
-- 每次都取 can-audio `new-client-sys` 的最新提交打包，用到的提交号写在 Release 说明和包里的 `controller/voice-engine.txt`。
+- 每次都取 can-audio `main` 的最新提交打包，用到的提交号写在 Release 说明和包里的 `controller/voice-engine.txt`。
   can-audio 有更新而本仓库没有改动时，在 Actions 里手动运行可以先试包；要发版需要往 `main` 推一个提交。
 - 发布前会跑 can-audio `controller/` 的单元测试和本仓库的 C# 检查（Windows、Linux、macOS 各一遍），并验包：exe 版本号、
   语音引擎带齐 opus / rnnoise、冻结后的语音引擎能回协议。三个系统的包全部打成功才发 Release。任何一步失败都不打标签、不发 Release。
@@ -180,4 +180,4 @@ macOS / Linux 执行 `packaging/build-rnnoise.sh can-audio can-audio/controller`
 ## 来源
 
 Python 语音引擎最初提取自 `JianyueLab-Org/can-audio` 的 `controller/`（源提交 `e724bff58ddad12eb965aba79817b4b58b30b489`），
-现在只在 can-audio 的 `new-client-sys` 分支维护。
+现在只在 can-audio 的 `main` 分支维护。

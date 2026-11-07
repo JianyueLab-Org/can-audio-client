@@ -11,7 +11,7 @@
 # 为什么不让仓库自己维护补丁号：那需要每次发版回推一个提交改文件，而那个提交又会触发这个工作流，
 # 自己咬自己。数标签没有这个问题——标签就是已发布版本的唯一事实来源。
 #
-# Python 语音引擎不在本仓库：每次运行都取 JianyueLab-Org/can-audio 的 new-client-sys **最新提交**
+# Python 语音引擎不在本仓库：每次运行都取 JianyueLab-Org/can-audio 的 main **最新提交**
 # 编进 can-voice.exe。提交号在 version 这一步解析一次，之后所有 job 检出同一个提交——不然中途有人
 # 推了 can-audio，测试过的和打进包里的就不是同一份代码。用的是哪个提交写在 Release 说明和包里的
 # controller/voice-engine.txt 里。
@@ -40,7 +40,7 @@ concurrency:
 
 env:
   VOICE_REPO: JianyueLab-Org/can-audio
-  VOICE_REF: new-client-sys
+  VOICE_REF: main
   # runner 的 stdout 默认是 cp1252，而语音引擎的日志和 requirements 注释全是中文
   PYTHONUTF8: '1'
   DOTNET_NOLOGO: '1'
@@ -52,7 +52,7 @@ jobs:
     outputs:
       number: ${{ steps.next.outputs.number }}       # 1.0.7
       tag: ${{ steps.next.outputs.tag }}             # v1.0.7
-      voice_sha: ${{ steps.voice.outputs.sha }}      # can-audio new-client-sys 的提交
+      voice_sha: ${{ steps.voice.outputs.sha }}      # can-audio main 的提交
     steps:
       - uses: actions/checkout@v7
         with:

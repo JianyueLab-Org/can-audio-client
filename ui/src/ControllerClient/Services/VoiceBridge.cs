@@ -8,7 +8,7 @@ namespace ControllerClient.Services;
 /// <summary>
 /// 通过标准输入输出调用 Python 语音引擎，凭据不进入命令行。
 /// 引擎不在本仓库：发行包里是打包好的 controller/can-voice(.exe)；从源码跑时用
-/// JianyueLab-Org/can-audio（new-client-sys 分支）的 controller/bridge.py，
+/// JianyueLab-Org/can-audio（main 分支）的 controller/bridge.py，
 /// 默认找仓库里的 can-audio/（sync-voice 脚本拉取），或用 CAN_AUDIO_DIR 指向别处的检出。
 /// </summary>
 public sealed class VoiceBridge : IAsyncDisposable
