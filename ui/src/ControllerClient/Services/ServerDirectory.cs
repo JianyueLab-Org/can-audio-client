@@ -9,12 +9,12 @@ public sealed record VoiceServer(string Name, string Host, int Port, string Loca
 }
 
 /// <summary>
-/// 公共服务器目录（https://ceruleanavi.net/api/v1/servers），照搬 Python 版 controller/serverdirectory.py：
+/// 公共服务器目录（https://api.ceruleanavi.net/api/v1/servers），照搬 Python 版 controller/serverdirectory.py：
 /// 只收 Mumble 端点；格式不对的条目跳过，同一 host:port 只留一个。
 /// </summary>
 public static class ServerDirectory
 {
-    public const string Url = "https://ceruleanavi.net/api/v1/servers";
+    public const string Url = "https://api.ceruleanavi.net/api/v1/servers";
 
     public static List<VoiceServer> Parse(string json)
     {
