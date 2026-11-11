@@ -184,42 +184,119 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IAsyncDisposabl
     [NotifyCanExecuteChangedFor(nameof(AddStationCommand))]
     private string _newStationText = string.Empty;
 
+    /// <summary>
+    /// 呼号在在线席位里找不到时记下它，输入框转为填频率（只接受 ***.*** 格式），用这个呼号建台站。
+    /// 为 null 时输入框是呼号模式。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AddStationLabel), nameof(AddStationPlaceholder))]
+    private string? _pendingStationCallsign;
+
+    /// <summary>输入框下方的提示，例如“未找到 XXX，请输入频率”。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAddStationHint))]
+    private string _addStationHint = string.Empty;
+
+    public bool HasAddStationHint => AddStationHint.Length > 0;
+    public string AddStationLabel => PendingStationCallsign is null ? "呼号" : "频率";
+    public string AddStationPlaceholder => PendingStationCallsign is null ? "ZBAA_APP" : "118.100";
+
+    /// <summary>手动建台站时频率必须是三位整数加三位小数，例如 118.100。</summary>
+    public static bool IsManualFrequency(string text) =>
+        System.Text.RegularExpressions.Regex.IsMatch(text, @"^[0-9]{3}\.[0-9]{3}$");
+
     [RelayCommand]
     private void BeginAddStation()
     {
-        NewStationText = string.Empty;
+        ResetAddStation();
         IsAddingStation = true;
     }
 
     [RelayCommand]
-    private void CancelAddStation() => IsAddingStation = false;
+    private void CancelAddStation()
+    {
+        ResetAddStation();
+        IsAddingStation = false;
+    }
+
+    private void ResetAddStation()
+    {
+        NewStationText = string.Empty;
+        PendingStationCallsign = null;
+        AddStationHint = string.Empty;
+    }
 
     private bool CanAddStation() => NewStationText.Trim().Length > 0 && !NewStationText.StartsWith('<');
 
-    /// <summary>按呼号或频率添加台站（AFV BtnCCConfirm：找不到时在输入框里显示 &lt;未找到&gt;）。</summary>
+    /// <summary>
+    /// 按呼号添加台站。呼号不在在线席位里时提示未找到，并要求输入 ***.*** 格式的频率来新建；
+    /// 直接输入 ***.*** 格式的频率也可以。
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanAddStation))]
     private void AddStation()
     {
         var text = NewStationText.Trim().ToUpperInvariant();
 
-        if (Stations.Any(s => s.Name == text || s.Frequency == text))
+        if (PendingStationCallsign is { } callsign)
         {
-            NewStationText = "<已在列表中>";
+            if (!IsManualFrequency(text))
+            {
+                AddStationHint = "频率格式应为 ***.***，例如 118.100";
+                return;
+            }
+            if (!TryAddRadio(callsign, text)) return;
+            FinishAddStation();
             return;
         }
 
+        if (Stations.Any(s => s.Name == text || s.Frequency == text))
+        {
+            AddStationHint = $"{text} 已在列表中";
+            return;
+        }
+
+        var position = _directory.Positions.FirstOrDefault(p => p.Callsign.Equals(text, StringComparison.OrdinalIgnoreCase));
+        if (position is not null)
+        {
+            if (TryAddRadio(position.Callsign, position.Frequency)) FinishAddStation();
+            return;
+        }
+
+        if (IsManualFrequency(text))
+        {
+            if (TryAddRadio(text, text)) FinishAddStation();
+            return;
+        }
+
+        // 呼号没找到：转为频率模式，用刚才的呼号建台站
+        PendingStationCallsign = text;
+        NewStationText = string.Empty;
+        AddStationHint = $"未找到 {text}，请输入频率（***.***）创建";
+    }
+
+    private bool TryAddRadio(string callsign, string frequency)
+    {
         try
         {
-            var position = _directory.Positions.FirstOrDefault(p => p.Callsign.Equals(text, StringComparison.OrdinalIgnoreCase));
-            AddRadio(position?.Callsign ?? text, position?.Frequency ?? text);
+            var formatted = (NetworkDirectory.ParseFrequency(frequency) / 1000m).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+            if (Stations.Any(s => s.Frequency == formatted))
+            {
+                AddStationHint = $"{formatted} 已在列表中";
+                return false;
+            }
+            AddRadio(callsign, formatted);
+            return true;
         }
         catch (FormatException)
         {
-            NewStationText = "<未找到>";
-            return;
+            AddStationHint = "频率超出范围（100.000–199.999）";
+            return false;
         }
+    }
 
-        NewStationText = string.Empty;
+    private void FinishAddStation()
+    {
+        ResetAddStation();
         IsAddingStation = false;
         StationPage = StationPageCount - 1;
     }

@@ -202,13 +202,23 @@
                 <Button Classes="mini" Content="+" ToolTip.Tip="添加台站" Command="{Binding BeginAddStationCommand}"
                         IsVisible="{Binding IsNotAddingStation}" />
                 <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsAddingStation}">
-                  <TextBlock Classes="caption" Text="呼号" VerticalAlignment="Center" Margin="0,0,2,0" />
-                  <TextBox Classes="mono" Width="110" Text="{Binding NewStationText}" PlaceholderText="ZBAA_APP"
+                  <TextBlock Classes="caption" Text="{Binding AddStationLabel}" VerticalAlignment="Center" Margin="0,0,2,0" />
+                  <TextBox Classes="mono" Width="110" Text="{Binding NewStationText}" PlaceholderText="{Binding AddStationPlaceholder}"
                            GotFocus="OnNewStationGotFocus" KeyDown="OnNewStationKeyDown" />
                   <Button Classes="mini" ToolTip.Tip="添加" Command="{Binding AddStationCommand}"><PathIcon Classes="check" /></Button>
                   <Button Classes="mini" ToolTip.Tip="取消" Command="{Binding CancelAddStationCommand}"><PathIcon Classes="close" /></Button>
                 </StackPanel>
               </StackPanel>
+              <!-- 呼号未找到 / 频率格式不对等提示 -->
+              <TextBlock Classes="caption" Text="{Binding AddStationHint}" TextWrapping="Wrap" MaxWidth="300"
+                         HorizontalAlignment="Left">
+                <TextBlock.IsVisible>
+                  <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="IsAddingStation" />
+                    <Binding Path="HasAddStationHint" />
+                  </MultiBinding>
+                </TextBlock.IsVisible>
+              </TextBlock>
             </StackPanel>
           </DockPanel>
         </Border>

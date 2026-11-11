@@ -545,3 +545,7 @@ calib.RunCalibration = _ => throw new IOException("未知命令或尚未连接: 
 await calib.CalibrateCommand.ExecuteAsync(null);
 Check(!calib.IsCalibrating && calib.CalibrationStatus.Contains("版本过旧"), "旧引擎不支持时应提示");
 Console.WriteLine("PASS: 麦克风校准基准、引擎事件与取消检查");
+
+// #6：呼号找不到时只接受 ***.*** 格式的频率来新建台站
+Check(MainWindowViewModel.IsManualFrequency("118.100") && MainWindowViewModel.IsManualFrequency("121.975"), "***.*** 格式的频率应被接受");
+Check(new[] { "118.1", "118", "1180.100", "118,100", "118.1000", "ABC.DEF", " 118.100", "" }.All(f => !MainWindowViewModel.IsManualFrequency(f)), "非 ***.*** 格式的频率应被拒绝");
