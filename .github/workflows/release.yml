@@ -2,10 +2,10 @@
 # 只出产物挂在 Actions 里，方便试包而不占版本号。往 main 开的 PR 同样跑测试和打包，但不发布——
 # 不然 PR 上什么检查都没有，合进 main 的那一下就直接发版了。
 #
-# 版本号规则：**只有 v1.0.xxx 的 xxx 会自动动。** 主次版本（1.0）是人的决定，写在
+# 版本号规则：**只有补丁号（vX.Y.xxx 的 xxx）会自动动。** 主次版本（X.Y）是人的决定，写在
 # ui/src/ControllerClient/ControllerClient.csproj 的 <CanVersion> 里，这个工作流从那一行推出系列；
-# 补丁号是数已有的 v1.0.* 标签取最大加一，一个都没有就从 .0 开始（所以第一次发 v1.0.0）。
-# 想发 1.1 就把 CanVersion 改成 1.1.0，下一次推送自动从 v1.1.0 开始。系列只有 csproj 一处，
+# 补丁号是数已有的 vX.Y.* 标签取最大加一，一个都没有就从 .0 开始（CanVersion 是 3.0.0 时第一次发 v3.0.0）。
+# 想发 3.1 就把 CanVersion 改成 3.1.0，下一次推送自动从 v3.1.0 开始。系列只有 csproj 一处，
 # 不会出现"工作流在老系列递增、源码报新系列"的两份版本号。
 #
 # 为什么不让仓库自己维护补丁号：那需要每次发版回推一个提交改文件，而那个提交又会触发这个工作流，
@@ -50,8 +50,8 @@ jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
-      number: ${{ steps.next.outputs.number }}       # 1.0.7
-      tag: ${{ steps.next.outputs.tag }}             # v1.0.7
+      number: ${{ steps.next.outputs.number }}       # 例如 3.0.7
+      tag: ${{ steps.next.outputs.tag }}             # 例如 v3.0.7
       voice_sha: ${{ steps.voice.outputs.sha }}      # can-audio main 的提交
     steps:
       - uses: actions/checkout@v7
