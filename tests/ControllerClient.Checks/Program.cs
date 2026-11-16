@@ -130,6 +130,34 @@ Check(ConnectionStatusViewModel.IsTerminalVoiceState("offline")
       && !ConnectionStatusViewModel.IsTerminalVoiceState("reconnecting")
       && !ConnectionStatusViewModel.IsTerminalVoiceState("online"),
       "重连耗尽的 offline 必须清理会话和距离策略，临时重连仍保留会话");
+
+// can-issues#26：网络协议偏好、回退提示
+Check(SettingsViewModel.NormalizeIpFamily("IPv6") == "ipv6" && SettingsViewModel.NormalizeIpFamily(null) == "auto"
+      && SettingsViewModel.NormalizeIpFamily("ipv9") == "auto", "网络协议设置只认 auto / ipv4 / ipv6");
+var familySettings = new SettingsViewModel();
+familySettings.MarkSaved();
+familySettings.SelectedIpFamily = SettingsViewModel.AllIpFamilies[2];
+Check(familySettings.IpFamily == "ipv6" && familySettings.IsDirty, "选网络协议应改设置并允许应用");
+var family = new ConnectionStatusViewModel();
+family.ResetAddress();
+var familyLog = family.UpdateVoice(Binding(new { connected = true, running = true, transport = "UDP", latency_ms = 30.0,
+    ip_family = "IPv6", ip_fallback = (object?)null }));
+Check(family.VoiceText == "语音：已连接 · UDP · IPv6 · 30 ms" && familyLog == "语音连接使用 IPv6" && family.FallbackText is null,
+      "状态栏应显示实际使用的协议，首次连上记一行日志");
+Check(family.UpdateVoice(Binding(new { connected = true, running = true, transport = "UDP", latency_ms = 31.0,
+    ip_family = "IPv6", ip_fallback = (object?)null })) is null, "协议没变时每秒的快照不应重复记日志");
+familyLog = family.UpdateVoice(Binding(new { connected = true, running = true, transport = "TCP", latency_ms = 40.0,
+    ip_family = "IPv4", ip_fallback = new { reason = "missing", wanted = "IPv6", used = "IPv4" } }));
+Check(family.VoiceText == "语音：已连接 · TCP · IPv4（无 IPv6，已回退） · 40 ms"
+      && family.FallbackText == "服务器没有 IPv6 地址，已自动改用 IPv4 连接。" && familyLog!.Contains("已自动改用 IPv4"),
+      "所选协议没有解析时应在状态栏和日志里明确说明已回退");
+family.UpdateVoice(Binding(new { connected = true, running = true, transport = "UDP", latency_ms = 50.0,
+    ip_family = "IPv4", ip_fallback = new { reason = "unreachable", wanted = "IPv6", used = "IPv4" } }));
+Check(family.VoiceText.Contains("IPv6 不通，已回退") && family.FallbackText!.Contains("IPv6 连接失败"), "所选协议连不上时应说明已回退");
+family.UpdateVoice(Binding(new { connected = true, running = true, transport = "UDP", latency_ms = 23.0 }));
+Check(family.VoiceText == "语音：已连接 · UDP · 23 ms", "旧引擎不带协议字段时照旧显示");
+Console.WriteLine("PASS: 网络协议偏好与回退提示检查");
+
 status.UpdateFsd(true, new DateTime(2026, 10, 23, 12, 34, 56), 50);
 Check(status.FsdText.Contains("已连接（数据源确认）") && status.FeedText.Contains("12:34:56"), "FSD 状态应注明数据源及更新时间");
 status.FeedFailed();

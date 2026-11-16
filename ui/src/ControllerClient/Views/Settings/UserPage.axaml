@@ -22,6 +22,11 @@
       <NumericUpDown Value="{Binding ServerPort}" Minimum="1" Maximum="65535" />
     </StackPanel>
     <TextBlock Classes="caption" Text="{Binding ServerListText}" TextWrapping="Wrap" IsVisible="{Binding ServerListText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    <!-- can-issues#26：双栈服务器优先用哪个地址族；连不上或没有该族的解析时自动改用另一个 -->
+    <TextBlock Classes="label" Text="网络协议" />
+    <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding IpFamilyChoices}" SelectedItem="{Binding SelectedIpFamily}" />
+    <TextBlock Classes="caption" TextWrapping="Wrap"
+               Text="服务器同时支持 IPv4 和 IPv6 时优先使用所选协议；所选协议连不上或服务器不支持时会自动改用另一个，并在状态栏提示。下次连接时生效。" />
     <TextBlock Classes="caption" Text="{Binding StatusText}" TextWrapping="Wrap" />
   </StackPanel>
 </UserControl>

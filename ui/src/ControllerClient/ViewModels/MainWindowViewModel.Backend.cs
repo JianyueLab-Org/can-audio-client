@@ -105,7 +105,9 @@ public sealed partial class MainWindowViewModel
         IsConnecting = true;
         _sessionCid = Settings.NetworkId.Trim();
         ConnectionStatus.SetVoiceState("connecting");
-        AppLog.Info($"请求连接语音服务器 {Settings.ServerHost}:{Settings.ServerPort}");
+        var ipFamily = SettingsViewModel.NormalizeIpFamily(Settings.IpFamily);
+        ConnectionStatus.ResetAddress();
+        AppLog.Info($"请求连接语音服务器 {Settings.ServerHost}:{Settings.ServerPort}（网络协议：{Settings.SelectedIpFamily.Label}）");
         try
         {
             // 每次连接重新枚举，避免保存过设备但未打开设置时退回系统默认。
@@ -115,7 +117,7 @@ public sealed partial class MainWindowViewModel
             AppLog.Info($"音频设备：输入 {Settings.InputDeviceName} → {input?.ToString() ?? "默认"}，"
                         + $"输出 {Settings.HeadsetDeviceName} → {output?.ToString() ?? "默认"}");
             var result = await _bridge.SendAsync("connect", new { host = Settings.ServerHost, port = Settings.ServerPort,
-                cid = _sessionCid, password = Settings.Password, input, output });
+                cid = _sessionCid, password = Settings.Password, input, output, ip_family = ipFamily });
             if (result.ValueKind != JsonValueKind.True) throw new IOException(StatusText);
             IsConnected = true;
             IsExpanded = true;
@@ -336,7 +338,14 @@ public sealed partial class MainWindowViewModel
         if (!msg.TryGetProperty("event", out var kind)) return;
         switch (kind.GetString())
         {
-            case "connection": ConnectionStatus.UpdateVoice(msg); break;
+            case "connection":
+                // 地址族或回退情况变了（首次连上、重连换了族）才记一次，每秒的快照不刷日志
+                if (ConnectionStatus.UpdateVoice(msg) is { } addressChange)
+                {
+                    AppLog.Info(addressChange);
+                    if (ConnectionStatus.FallbackText is { } fallback) StatusText = fallback;
+                }
+                break;
             case "state":
             case "fatal":
                 StatusText = msg.GetProperty("message").GetString() ?? "";
