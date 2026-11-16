@@ -50,6 +50,32 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private (string Host, int Port) _customServer;
     private bool _syncingServer;
 
+    // —— IPv4 / IPv6（can-issues#26）：服务器同时有 A 和 AAAA 记录时优先用哪个。
+    // 选的那个连不上或没有解析记录时，语音引擎会自动改用另一个，并在状态栏和日志里说明 ——
+    public const string IpFamilyAuto = "auto";
+    public static readonly IReadOnlyList<IpFamilyChoice> AllIpFamilies =
+    [
+        new("自动（按系统顺序）", IpFamilyAuto),
+        new("优先 IPv4", "ipv4"),
+        new("优先 IPv6", "ipv6"),
+    ];
+    public IReadOnlyList<IpFamilyChoice> IpFamilyChoices => AllIpFamilies;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedIpFamily))]
+    private string _ipFamily = IpFamilyAuto;
+    public IpFamilyChoice SelectedIpFamily
+    {
+        get => AllIpFamilies.FirstOrDefault(c => c.Value == IpFamily) ?? AllIpFamilies[0];
+        set { if (value is not null) IpFamily = value.Value; }
+    }
+
+    /// <summary>设置文件里的值 → auto / ipv4 / ipv6，认不出来的一律当自动（与引擎 normalise_ip_family 一致）。</summary>
+    public static string NormalizeIpFamily(string? value)
+    {
+        var name = (value ?? "").Trim().ToLowerInvariant();
+        return AllIpFamilies.Any(c => c.Value == name) ? name : IpFamilyAuto;
+    }
+
     public SettingsViewModel()
     {
         AddPttBinding(JsonSerializer.SerializeToElement(new { kind = "keyboard", key = "v" }));
@@ -426,6 +452,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
 /// <summary>服务器下拉框的一项；<see cref="Server"/> 为 null 表示“自定义”。</summary>
 public sealed record ServerChoice(string Label, VoiceServer? Server)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record IpFamilyChoice(string Label, string Value)
 {
     public override string ToString() => Label;
 }

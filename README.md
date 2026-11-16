@@ -82,9 +82,11 @@ cd can-audio-client-<版本>-linux-x64
 
 多频率监听需要 Mumble 1.4+ 和相应频道权限。支持 UDP 音频，不可用时回退 TCP；断线有限重连，被踢后不自动抢回登录。
 
+「设置 → 用户信息 → 网络协议」可选自动 / 优先 IPv4 / 优先 IPv6。服务器同时有 IPv4 和 IPv6 地址时先用所选协议；所选协议连不上或服务器没有该协议的地址时自动改用另一个，状态栏显示「IPv4（IPv6 不通，已回退）」之类的提示并写入日志。自动模式按系统顺序尝试，同样会在一个协议连不上时改用另一个。
+
 ## 状态、设置与日志
 
-- 主窗口顶部及置顶小窗显示实时语音状态，格式为「已连接 · UDP/TCP · 23 ms」。每秒读取语音引擎的真实平均 Ping RTT，无样本时显示 `-- ms`。
+- 主窗口顶部及置顶小窗显示实时语音状态，格式为「已连接 · UDP/TCP · IPv4/IPv6 · 23 ms」，从所选网络协议回退时会在协议后注明。每秒读取语音引擎的真实平均 Ping RTT，无样本时显示 `-- ms`。
 - FSD 状态每 15 秒依据 CAN 数据源确认账号在线情况，并标注「数据源确认」。本程序不直接建立 FSD 会话，不替代 EuroScope 等客户端上席位。HTTP 请求耗时单独显示，不当作 FSD 延迟。
 - 设置位于 `%LOCALAPPDATA%/CAN/AudioClient/settings.json`（macOS：`~/Library/Application Support/CAN/AudioClient/`，
   Linux：`~/.local/share/CAN/AudioClient/`）。三个系统的 PTT 键名相同，设置文件可以互相拷贝。密码仅保存在内存，麦克风会话增益每次启动恢复默认值。

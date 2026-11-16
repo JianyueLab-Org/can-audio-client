@@ -24,6 +24,7 @@ public static class SettingsStore
                 model.ServerHost = host;
                 model.ServerPort = (int?)json["mumble_port"] ?? SettingsViewModel.DefaultServerPort;
             }
+            model.IpFamily = SettingsViewModel.NormalizeIpFamily((string?)json["ip_family"]);
             model.OutputVolume = 20 * Math.Log10(Math.Max(1, (double?)json["speaker_volume"] ?? 100) / 100);
             model.InputDeviceName = (string?)json["input_name"] ?? "系统默认";
             model.HeadsetDeviceName = (string?)json["output_name"] ?? "系统默认";
@@ -45,6 +46,7 @@ public static class SettingsStore
             throw new InvalidOperationException("请填写正确的语音服务器地址和端口。");
         Directory.CreateDirectory(DirectoryPath);
         var data = new { last_username = model.NetworkId, mumble_host = model.ServerHost, mumble_port = model.ServerPort,
+            ip_family = SettingsViewModel.NormalizeIpFamily(model.IpFamily),
             speaker_volume = 100 * Math.Pow(10, model.OutputVolume / 20), mic_denoise = !model.DisableAudioEffects,
             input_name = model.InputDeviceName, output_name = model.HeadsetDeviceName, speaker_name = model.SpeakerDeviceName,
             ptt_bindings = model.PttBindings, mic_calibration = model.MicCalibration };
